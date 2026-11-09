@@ -46,7 +46,7 @@ public final class Thunder {
         double cell = Dsp.valueNoise(seed ^ 0xac71, t, ACTIVITY_PERIOD * 4);
         double burst = Dsp.valueNoise(seed ^ 0x3c19, t, ACTIVITY_PERIOD);
         double v = 0.45 * cell + 0.55 * burst;
-        double bursty = 0.05 + 4.6 * v * v * v;
+        double bursty = 0.3 + 4.07 * v * v * v;
         return 1 + (bursty - 1) * Dsp.clamp01(variety);
     }
 

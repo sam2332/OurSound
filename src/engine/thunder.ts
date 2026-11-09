@@ -53,11 +53,12 @@ export type Strike = {
 /** Storm activity multiplier at time t (mean ≈ 1): bursts and lulls. */
 export function stormActivity(seed: number, t: number, variety: number): number {
   // Two drifting layers: storm cells (~20 min) and bursts within them (~4 min).
-  // v³ makes most of the time calm and a little of it very active (mean ≈ 1).
+  // v³ makes most of the time calmer and a little of it very active (mean ≈ 1);
+  // the 0.3 floor keeps lulls from going silent for many minutes.
   const cell = valueNoise(seed ^ 0xac71, t, ACTIVITY_PERIOD * 4);
   const burst = valueNoise(seed ^ 0x3c19, t, ACTIVITY_PERIOD);
   const v = 0.45 * cell + 0.55 * burst;
-  const bursty = 0.05 + 4.6 * v * v * v;
+  const bursty = 0.3 + 4.07 * v * v * v;
   return 1 + (bursty - 1) * clamp01(variety);
 }
 
@@ -254,7 +255,7 @@ export const thunder: GeneratorDef = {
   type: 'thunder',
   label: 'Thunder',
   params: [
-    { name: 'rate', label: 'Strikes per hour', unit: '/h', min: 1, max: 120, default: 8 },
+    { name: 'rate', label: 'Strikes per hour', unit: '/h', min: 1, max: 120, default: 20 },
     { name: 'distance', label: 'Distance', unit: '', min: 0, max: 1, default: 0.5 },
     { name: 'intensity', label: 'Intensity', unit: '', min: 0, max: 1, default: 0.7 },
     { name: 'variety', label: 'Variety', unit: '', min: 0, max: 1, default: 0.6 },

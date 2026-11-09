@@ -188,7 +188,7 @@ export const TEMPLATES: Template[] = [
       timeline('Rainy Window', H8, [
         track('Rain', 1, [seg('rain', H8, { params: { intensity: 0.4, sheets: 0.4, brightness: 0.3 }, gainDb: -13, fadeIn: 30 })]),
         track('Distant thunder', 4, [
-          seg('thunder', H8, { params: { rate: 2, distance: 0.88, intensity: 0.45, variety: 0.3 }, gainDb: -15, fadeIn: 5, fadeOut: 5 }),
+          seg('thunder', H8, { params: { rate: 6, distance: 0.85, intensity: 0.5, variety: 0.3 }, gainDb: -14, fadeIn: 5, fadeOut: 5 }),
         ]),
         track('Delta 2.5 Hz', 0, [seg('binaural', H8, { params: { carrier: 150, beat: 2.5 }, gainDb: -24, fadeIn: 2 * MIN })]),
       ]),
@@ -210,10 +210,10 @@ export const TEMPLATES: Template[] = [
         ]),
         track('Thunder', 4, [
           seg('thunder', H8, {
-            params: { rate: 10, distance: 0.45, intensity: 0.7, variety: 0.7 },
-            gainDb: -15,
+            params: { rate: 40, distance: 0.4, intensity: 0.75, variety: 0.7 },
+            gainDb: -10,
             fadeIn: 5,
-            auto: { distance: pts([0, 0.4], [3 * HOUR, 0.95]), rate: pts([0, 10], [3 * HOUR, 3]) },
+            auto: { distance: pts([0, 0.4], [3 * HOUR, 0.9]), rate: pts([0, 40], [3 * HOUR, 8]) },
           }),
         ]),
         track('Wind', 6, [seg('wind', H8, { params: { strength: 0.4, gusts: 0.5, pitch: 0.3 }, gainDb: -18 })]),
@@ -505,9 +505,9 @@ export const TEMPLATES: Template[] = [
         track('Thunder', 4, [
           seg('thunder', d, {
             params: { rate: 4, distance: 0.9, intensity: 0.7, variety: 0.8 },
-            gainDb: -15,
+            gainDb: -10,
             fadeIn: 5,
-            auto: { distance: pts([0, 0.95], [40 * MIN, 0.25], [d, 0.95]), rate: pts([0, 2], [40 * MIN, 14], [d, 2]) },
+            auto: { distance: pts([0, 0.95], [40 * MIN, 0.25], [d, 0.95]), rate: pts([0, 4], [40 * MIN, 45], [d, 4]) },
           }),
         ]),
         track('Wind', 6, [

@@ -397,7 +397,7 @@ function trimmed(def: GeneratorDef, k: number): GeneratorDef {
 export const AMBIENT_GENERATORS = {
   fan: trimmed(fan, 0.49),
   rain: trimmed(rain, 1.4),
-  thunder: trimmed(thunder, 0.5),
+  thunder: trimmed(thunder, 1),
   wind: trimmed(wind, 1.42),
   ocean: trimmed(ocean, 0.96),
   campfire: trimmed(campfire, 2),
