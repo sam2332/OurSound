@@ -9,13 +9,13 @@
 //      skyroll  a long roll (30–45 s) travelling across the sky
 //  - its own timbre (filter), stereo width and movement across the field,
 //  - a rolling texture made of separate arrivals: the sound of each part of the
-//    bolt reaches you at its own time, so a roll is a string of low booms, each
+//    bolt reaches you at its own time, so a roll is a string of shock pulses
 //    with a quick hit and a short fade (smooth swells alone sound like wind).
 // Strikes come in bursts and lulls following a slowly drifting storm-activity
 // curve around the strikes-per-hour setting. "Variety" goes from a steady,
 // uniform storm (0) to a wild, mixed one (1).
 
-import { Brown, LowPass, TWO_PI, clamp01, stateful, valueNoise } from './dsp.ts';
+import { Brown, LowPass, Pink, TWO_PI, clamp01, stateful, valueNoise } from './dsp.ts';
 import { fastSigned, rand01, seedMix } from './hash.ts';
 import type { GeneratorDef } from './generators.ts';
 
@@ -256,54 +256,63 @@ export function rumbleEnvelope(s: Strike, t: number): number {
   return (0.23 * base + 0.52 * a) * tail * s.level;
 }
 
-const MAX_ARR = 48; // most arrivals tracked per strike at once
+// The rumble's noise and filters sit high enough to be heard on small speakers.
+const RUMBLE_OPEN = 1.8; // filter cutoffs, times each strike's own
+const RUMBLE_PINK = 1.5;
+const RUMBLE_BROWN = 0.5;
+const LOW_CUT = 35; // Hz: below this is felt, not heard, and only eats headroom
+
+const MAX_ARR = 48; // most shock pulses tracked per strike in one control step
+const P_SLOT = 0.004; // s per pulse slot
+const P_MAX_D = 0.031; // longest pulse (s)
 
 /**
- * The arrivals of `s` that have started by strike-local time x and may still
- * sound, written to `out` from `off` as [at, amp, tau, f]. Returns how many.
+ * The shock pulses of `s` overlapping strike-local times [xa, xb], written to
+ * `out` from `off` as [at, amp, duration, rise]. Returns how many.
+ * Thunder is made of N-waves: a sharp jump up, a slide down, a sharp jump back.
+ * Their sharp edges are what you hear as the crack and grumble of a roll; far
+ * away the edges soften and the pulses stretch, so the sound gets duller.
  */
-function arrivalsAt(s: Strike, x: number, out: Float64Array, off: number): number {
-  const att = 0.006 + 0.04 * (1 - s.near);
-  const pMax = Math.min(0.9, s.arrRate * ARR_SLOT);
+function pulsesAt(s: Strike, xa: number, xb: number, out: Float64Array, off: number): number {
+  const seed = s.grumbleSeed ^ 0x2b2b;
+  const pMax = Math.min(0.9, s.arrRate * 6 * P_SLOT);
+  const dur = 0.004 + 0.022 * (1 - s.near);
+  const rise = 0.0003 + 0.0025 * (1 - s.near);
   let c = 0;
-  const q1 = Math.floor(x / ARR_SLOT);
-  for (let q = q1; q > q1 - ARR_BACK && q >= 0 && c < MAX_ARR; q--) {
-    const hit = rand01(s.grumbleSeed, q * 4 + 1);
+  const qa = Math.max(0, Math.floor((xa - P_MAX_D) / P_SLOT));
+  const qb = Math.floor(xb / P_SLOT);
+  for (let q = qa; q <= qb && c < MAX_ARR; q++) {
+    const hit = rand01(seed, q * 4);
     if (hit >= pMax) continue;
-    const at = (q + rand01(s.grumbleSeed, q * 4)) * ARR_SLOT;
-    if (at > x) continue;
+    const at = (q + rand01(seed, q * 4 + 1)) * P_SLOT;
+    const d = dur * (0.6 + 0.8 * rand01(seed, q * 4 + 2));
+    if (at > xb || at + d < xa) continue;
     const env0 = rollsAt(s, at);
     if (hit >= pMax * Math.min(1, env0 * 1.5)) continue;
-    const tau = s.arrDecay * (0.5 + rand01(s.grumbleSeed, q * 4 + 3));
-    if (x - at - att > tau * 6) continue;
-    const k = rand01(s.grumbleSeed, q * 4 + 2);
+    const k = rand01(seed, q * 4 + 3);
     const o = off + c * 4;
     out[o] = at;
-    out[o + 1] = env0 * (0.3 + 1.6 * k * k * k);
-    out[o + 2] = tau;
-    // each arrival is a low pressure wave: deeper from far away
-    out[o + 3] = (38 + 52 * s.near) * (0.75 + 0.5 * rand01(s.grumbleSeed ^ 0x5a5a, q));
+    out[o + 1] = env0 * (0.3 + 1.4 * k * k * k);
+    out[o + 2] = d;
+    out[o + 3] = rise;
     c++;
   }
   return c;
 }
 
-/** The booms of the arrivals in `buf` at strike-local time x: short low tones whose pitch falls. */
-function boomAt(s: Strike, buf: Float64Array, off: number, count: number, x: number): number {
-  const att = 0.006 + 0.04 * (1 - s.near);
+const smooth = (x: number) => x * x * (3 - 2 * x);
+
+/** Sum of the pulses in `buf` at strike-local time x. */
+function pulseAt(buf: Float64Array, off: number, count: number, x: number): number {
   let y = 0;
   for (let j = 0; j < count; j++) {
     const o = off + j * 4;
     const u = x - buf[o];
-    if (u < 0) continue;
-    const tau = buf[o + 2];
-    if (u - att > tau * 6) continue;
-    const f = buf[o + 3];
-    const rise = u < att ? 0.5 - 0.5 * Math.cos((Math.PI * u) / att) : 1;
-    const env = buf[o + 1] * rise * Math.exp(-Math.max(0, u - att) / tau);
-    // starts half an octave up and settles (exact phase integral)
-    const ph = f * u + f * 0.5 * 0.06 * (1 - Math.exp(-u / 0.06));
-    y += env * Math.sin(TWO_PI * ph);
+    const d = buf[o + 2];
+    if (u < 0 || u >= d) continue;
+    const tr = buf[o + 3];
+    const w = u < tr ? smooth(u / tr) : u < d - tr ? 1 - (2 * (u - tr)) / (d - 2 * tr) : -1 + smooth((u - d + tr) / tr);
+    y += buf[o + 1] * w;
   }
   return y;
 }
@@ -350,6 +359,10 @@ export const thunder: GeneratorDef = {
     const sR = seedMix(seed ^ 0x6b2);
     const brownL = new Brown();
     const brownR = new Brown();
+    const pinkL = new Pink();
+    const pinkR = new Pink();
+    const lowL = new LowPass();
+    const lowR = new LowPass();
     const strikes: (Strike | null)[] = new Array(LOOKBACK).fill(null);
     const states = new Map<number, StrikeState>();
     const envA = new Float64Array(LOOKBACK);
@@ -370,10 +383,10 @@ export const thunder: GeneratorDef = {
       let st = states.get(s.slot);
       if (!st) {
         st = { l1: new LowPass(), l2: new LowPass(), r1: new LowPass(), r2: new LowPass() };
-        st.l1.setCutoff(s.cutoff, sr);
-        st.r1.setCutoff(s.cutoff, sr);
-        st.l2.setCutoff(s.cutoff * 1.4, sr);
-        st.r2.setCutoff(s.cutoff * 1.4, sr);
+        st.l1.setCutoff(s.cutoff * RUMBLE_OPEN, sr);
+        st.r1.setCutoff(s.cutoff * RUMBLE_OPEN, sr);
+        st.l2.setCutoff(s.cutoff * 1.4 * RUMBLE_OPEN, sr);
+        st.r2.setCutoff(s.cutoff * 1.4 * RUMBLE_OPEN, sr);
         states.set(s.slot, st);
       }
       return st;
@@ -383,6 +396,10 @@ export const thunder: GeneratorDef = {
       reset() {
         brownL.reset();
         brownR.reset();
+        pinkL.reset();
+        pinkR.reset();
+        lowL.reset();
+        lowR.reset();
         states.clear();
         prevWl = 0;
       },
@@ -417,14 +434,20 @@ export const thunder: GeneratorDef = {
           // silence between strikes, with sources at a known state (seek-safe)
           brownL.reset();
           brownR.reset();
+          pinkL.reset();
+          pinkR.reset();
+          lowL.reset();
+          lowR.reset();
           states.clear();
           L.fill(0, 0, n);
           R.fill(0, 0, n);
           return;
         }
 
-        const gain = 3.6 * (0.35 + 0.65 * intensity);
-        const boomGain = gain * 0.52 * 0.3;
+        const gain = 1.8 * (0.35 + 0.65 * intensity);
+        const pulseGain = gain * 1;
+        lowL.setCutoff(LOW_CUT, sr);
+        lowR.setCutoff(LOW_CUT, sr);
         for (let i0 = 0; i0 < n; i0 += SUB) {
           const m = Math.min(n, i0 + SUB);
           const ta = (start + i0) / sr;
@@ -437,7 +460,7 @@ export const thunder: GeneratorDef = {
               continue;
             }
             envA[k] = rumbleEnvelope(s, ta);
-            arrN[k] = arrivalsAt(s, tb - s.start, arrBuf, k * MAX_ARR * 4);
+            arrN[k] = pulsesAt(s, ta - s.start, tb - s.start, arrBuf, k * MAX_ARR * 4);
             envB[k] = rumbleEnvelope(s, tb);
             crA[k] = crackEnvelope(s, ta);
             crB[k] = crackEnvelope(s, tb);
@@ -451,8 +474,8 @@ export const thunder: GeneratorDef = {
             const idx = start + i;
             const wl = fastSigned(sL, idx);
             const wr = fastSigned(sR, idx);
-            const bl = brownL.step(wl);
-            const br = brownR.step(wr);
+            const bl = brownL.step(wl) * RUMBLE_BROWN + pinkL.step(wl) * RUMBLE_PINK;
+            const br = brownR.step(wr) * RUMBLE_BROWN + pinkR.step(wr) * RUMBLE_PINK;
             const crackNoise = (wl - prevWl) * 0.7; // crisp, tearing
             prevWl = wl;
             const f = (i - i0) / (m - i0);
@@ -465,7 +488,7 @@ export const thunder: GeneratorDef = {
               const e = envA[k] + (envB[k] - envA[k]) * f;
               const c = crA[k] + (crB[k] - crA[k]) * f;
               const th = thumpAt(s, t);
-              const bm = arrN[k] > 0 ? boomAt(s, arrBuf, k * MAX_ARR * 4, arrN[k], t - s.start) * boomGain * (0.5 + 0.5 * s.near) * s.level : 0;
+              const bm = arrN[k] > 0 ? pulseAt(arrBuf, k * MAX_ARR * 4, arrN[k], t - s.start) * pulseGain * s.level : 0;
               if (e === 0 && c === 0 && th === 0 && bm === 0) continue;
               const st = stateFor(s, sr);
               const nl = st.l2.step(st.l1.step(bl));
@@ -478,8 +501,8 @@ export const thunder: GeneratorDef = {
               l += ml * panL[k];
               r += mr * panR[k];
             }
-            L[i] = l;
-            R[i] = r;
+            L[i] = l - lowL.step(l);
+            R[i] = r - lowR.step(r);
           }
         }
       },

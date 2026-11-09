@@ -270,47 +270,52 @@ public final class Thunder {
         return (0.23 * base + 0.52 * a) * tail * s.level;
     }
 
+    private static final double RUMBLE_OPEN = 1.8, RUMBLE_PINK = 1.5, RUMBLE_BROWN = 0.5, LOW_CUT = 35;
     private static final int MAX_ARR = 48;
+    private static final double P_SLOT = 0.004, P_MAX_D = 0.031;
 
-    private static int arrivalsAt(Strike s, double x, double[] out, int off) {
-        double att = 0.006 + 0.04 * (1 - s.near);
-        double pMax = Math.min(0.9, s.arrRate * ARR_SLOT);
+    /** Shock pulses (N-waves) overlapping [xa, xb]; see thunder.ts. */
+    private static int pulsesAt(Strike s, double xa, double xb, double[] out, int off) {
+        int seed = s.grumbleSeed ^ 0x2b2b;
+        double pMax = Math.min(0.9, s.arrRate * 6 * P_SLOT);
+        double dur = 0.004 + 0.022 * (1 - s.near);
+        double rise = 0.0003 + 0.0025 * (1 - s.near);
         int c = 0;
-        double q1 = Math.floor(x / ARR_SLOT);
-        for (double q = q1; q > q1 - ARR_BACK && q >= 0 && c < MAX_ARR; q--) {
-            double hit = Hash.rand01(s.grumbleSeed, q * 4 + 1);
+        double qa = Math.max(0, Math.floor((xa - P_MAX_D) / P_SLOT));
+        double qb = Math.floor(xb / P_SLOT);
+        for (double q = qa; q <= qb && c < MAX_ARR; q++) {
+            double hit = Hash.rand01(seed, q * 4);
             if (hit >= pMax) continue;
-            double at = (q + Hash.rand01(s.grumbleSeed, q * 4)) * ARR_SLOT;
-            if (at > x) continue;
+            double at = (q + Hash.rand01(seed, q * 4 + 1)) * P_SLOT;
+            double d = dur * (0.6 + 0.8 * Hash.rand01(seed, q * 4 + 2));
+            if (at > xb || at + d < xa) continue;
             double env0 = rollsAt(s, at);
             if (hit >= pMax * Math.min(1, env0 * 1.5)) continue;
-            double tau = s.arrDecay * (0.5 + Hash.rand01(s.grumbleSeed, q * 4 + 3));
-            if (x - at - att > tau * 6) continue;
-            double k = Hash.rand01(s.grumbleSeed, q * 4 + 2);
+            double k = Hash.rand01(seed, q * 4 + 3);
             int o = off + c * 4;
             out[o] = at;
-            out[o + 1] = env0 * (0.3 + 1.6 * k * k * k);
-            out[o + 2] = tau;
-            out[o + 3] = (38 + 52 * s.near) * (0.75 + 0.5 * Hash.rand01(s.grumbleSeed ^ 0x5a5a, q));
+            out[o + 1] = env0 * (0.3 + 1.4 * k * k * k);
+            out[o + 2] = d;
+            out[o + 3] = rise;
             c++;
         }
         return c;
     }
 
-    private static double boomAt(Strike s, double[] buf, int off, int count, double x) {
-        double att = 0.006 + 0.04 * (1 - s.near);
+    private static double smooth(double x) {
+        return x * x * (3 - 2 * x);
+    }
+
+    private static double pulseAt(double[] buf, int off, int count, double x) {
         double y = 0;
         for (int j = 0; j < count; j++) {
             int o = off + j * 4;
             double u = x - buf[o];
-            if (u < 0) continue;
-            double tau = buf[o + 2];
-            if (u - att > tau * 6) continue;
-            double f = buf[o + 3];
-            double rise = u < att ? 0.5 - 0.5 * Math.cos((Math.PI * u) / att) : 1;
-            double env = buf[o + 1] * rise * Math.exp(-Math.max(0, u - att) / tau);
-            double ph = f * u + f * 0.5 * 0.06 * (1 - Math.exp(-u / 0.06));
-            y += env * Math.sin(Dsp.TWO_PI * ph);
+            double d = buf[o + 2];
+            if (u < 0 || u >= d) continue;
+            double tr = buf[o + 3];
+            double w = u < tr ? smooth(u / tr) : u < d - tr ? 1 - (2 * (u - tr)) / (d - 2 * tr) : -1 + smooth((u - d + tr) / tr);
+            y += buf[o + 1] * w;
         }
         return y;
     }
@@ -349,6 +354,8 @@ public final class Thunder {
         final int sEv = seed ^ 0x7d3a;
         final int sL = Hash.seedMix(seed ^ 0x6b1), sR = Hash.seedMix(seed ^ 0x6b2);
         final Dsp.Brown brownL = new Dsp.Brown(), brownR = new Dsp.Brown();
+        final Dsp.Pink pinkL = new Dsp.Pink(), pinkR = new Dsp.Pink();
+        final Dsp.LowPass lowL = new Dsp.LowPass(), lowR = new Dsp.LowPass();
         final Strike[] strikes = new Strike[LOOKBACK];
         final Map<Double, StrikeState> states = new HashMap<>();
         final double[] envA = new double[LOOKBACK], envB = new double[LOOKBACK];
@@ -365,10 +372,10 @@ public final class Thunder {
                 StrikeState st = states.get(s.slot);
                 if (st == null) {
                     st = new StrikeState();
-                    st.l1.setCutoff(s.cutoff, sr);
-                    st.r1.setCutoff(s.cutoff, sr);
-                    st.l2.setCutoff(s.cutoff * 1.4, sr);
-                    st.r2.setCutoff(s.cutoff * 1.4, sr);
+                    st.l1.setCutoff(s.cutoff * RUMBLE_OPEN, sr);
+                    st.r1.setCutoff(s.cutoff * RUMBLE_OPEN, sr);
+                    st.l2.setCutoff(s.cutoff * 1.4 * RUMBLE_OPEN, sr);
+                    st.r2.setCutoff(s.cutoff * 1.4 * RUMBLE_OPEN, sr);
                     states.put(s.slot, st);
                 }
                 return st;
@@ -377,6 +384,10 @@ public final class Thunder {
             public void reset() {
                 brownL.reset();
                 brownR.reset();
+                pinkL.reset();
+                pinkR.reset();
+                lowL.reset();
+                lowR.reset();
                 states.clear();
                 prevWl = 0;
             }
@@ -406,13 +417,19 @@ public final class Thunder {
                 if (!any) {
                     brownL.reset();
                     brownR.reset();
+                    pinkL.reset();
+                    pinkR.reset();
+                    lowL.reset();
+                    lowR.reset();
                     states.clear();
                     java.util.Arrays.fill(L, 0, n, 0f);
                     java.util.Arrays.fill(R, 0, n, 0f);
                     return;
                 }
-                double gain = 3.6 * (0.35 + 0.65 * intensity);
-                double boomGain = gain * 0.52 * 0.3;
+                double gain = 1.8 * (0.35 + 0.65 * intensity);
+                double pulseGain = gain * 1;
+                lowL.setCutoff(LOW_CUT, sr);
+                lowR.setCutoff(LOW_CUT, sr);
                 for (int i0 = 0; i0 < n; i0 += SUB) {
                     int m = Math.min(n, i0 + SUB);
                     double ta = (start + i0) / sr;
@@ -425,7 +442,7 @@ public final class Thunder {
                             continue;
                         }
                         envA[k] = rumbleEnvelope(s, ta);
-                        arrN[k] = arrivalsAt(s, tb - s.start, arrBuf, k * MAX_ARR * 4);
+                        arrN[k] = pulsesAt(s, ta - s.start, tb - s.start, arrBuf, k * MAX_ARR * 4);
                         envB[k] = rumbleEnvelope(s, tb);
                         crA[k] = crackEnvelope(s, ta);
                         crB[k] = crackEnvelope(s, tb);
@@ -437,7 +454,8 @@ public final class Thunder {
                     for (int i = i0; i < m; i++) {
                         double idx = start + i;
                         double wl = Hash.fastSigned(sL, idx), wr = Hash.fastSigned(sR, idx);
-                        double bl = brownL.step(wl), br = brownR.step(wr);
+                        double bl = brownL.step(wl) * RUMBLE_BROWN + pinkL.step(wl) * RUMBLE_PINK;
+                        double br = brownR.step(wr) * RUMBLE_BROWN + pinkR.step(wr) * RUMBLE_PINK;
                         double crackNoise = (wl - prevWl) * 0.7;
                         prevWl = wl;
                         double f = (double) (i - i0) / (m - i0);
@@ -449,7 +467,7 @@ public final class Thunder {
                             double e = envA[k] + (envB[k] - envA[k]) * f;
                             double c = crA[k] + (crB[k] - crA[k]) * f;
                             double th = thumpAt(s, t);
-                            double bm = arrN[k] > 0 ? boomAt(s, arrBuf, k * MAX_ARR * 4, arrN[k], t - s.start) * boomGain * (0.5 + 0.5 * s.near) * s.level : 0;
+                            double bm = arrN[k] > 0 ? pulseAt(arrBuf, k * MAX_ARR * 4, arrN[k], t - s.start) * pulseGain * s.level : 0;
                             if (e == 0 && c == 0 && th == 0 && bm == 0) continue;
                             StrikeState st = stateFor(s, sr);
                             double nl = st.l2.step(st.l1.step(bl));
@@ -460,8 +478,8 @@ public final class Thunder {
                             l += ml * panL[k];
                             r += mr * panR[k];
                         }
-                        L[i] = (float) l;
-                        R[i] = (float) r;
+                        L[i] = (float) (l - lowL.step(l));
+                        R[i] = (float) (r - lowR.step(r));
                     }
                 }
             }
