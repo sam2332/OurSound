@@ -92,7 +92,19 @@ it.skipIf(!dir)('writes golden renders', () => {
     { name: 'blue', timeline: single('noise', { color: 4, width: 0.5 }), seek: 12, seconds: 0.5, capDb: -1 },
     { name: 'violet', timeline: single('noise', { color: 5, width: 1 }), seek: 3333, seconds: 0.5, capDb: -1 },
     { name: 'fan', timeline: single('fan', {}, { automation: [{ param: 'speed', points: [{ t: 0, v: 0.2 }, { t: 100, v: 0.9 }] }] }), seek: 40, seconds: 1, capDb: -1 },
-    { name: 'rain', timeline: single('rain', { drops: 0.9 }), seek: 1000, seconds: 1, capDb: -1 },
+    { name: 'rain', timeline: single('rain', { sheets: 0.9 }), seek: 1000, seconds: 2, capDb: -1 },
+    {
+      name: 'rain-auto',
+      timeline: single('rain', { brightness: 0.7 }, {
+        automation: [
+          { param: 'intensity', points: [{ t: 0, v: 0.1, curve: 'smooth' }, { t: 60, v: 0.95 }] },
+          { param: 'sheets', points: [{ t: 0, v: 1, curve: 'linear' }, { t: 60, v: 0.2 }] },
+        ],
+      }),
+      seek: 31,
+      seconds: 2,
+      capDb: -1,
+    },
     { name: 'wind', timeline: single('wind'), seek: 77, seconds: 1, capDb: -1 },
     { name: 'ocean', timeline: single('ocean'), seek: 123, seconds: 1, capDb: -1 },
     { name: 'campfire', timeline: single('campfire', { size: 0.7, crackle: 0.8, pops: 1 }), seek: 412, seconds: 3, capDb: -1 },

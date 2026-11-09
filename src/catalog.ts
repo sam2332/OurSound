@@ -39,7 +39,7 @@ const ALL: CatalogGroup[] = [
     title: 'Ambience',
     items: [
       { key: 'fan', label: 'Box fan', description: 'Motor hum and blade whoosh; adjustable speed', generator: 'fan' },
-      { key: 'rain', label: 'Rain', description: 'Rain bed with individual drops', generator: 'rain' },
+      { key: 'rain', label: 'Rain', description: 'Soft rain that falls in sheets and waves', generator: 'rain' },
       { key: 'thunder', label: 'Thunder', description: 'Rolling thunder at random times', generator: 'thunder' },
       { key: 'wind', label: 'Wind', description: 'Gusting wind', generator: 'wind' },
       { key: 'ocean', label: 'Ocean waves', description: 'Waves rolling in and out', generator: 'ocean' },

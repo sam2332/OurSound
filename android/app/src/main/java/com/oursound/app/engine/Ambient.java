@@ -56,75 +56,94 @@ final class Ambient {
 
     // ------------------------------------------------------------ rain
 
-    private static final int DROP_SLOT = 48;
-    private static final int DROP_MAX_LEN = 1024;
-    private static final int DROP_ATTACK = 12;
+    private static final int RAIN_SUB = 32;
+    private static final int GRAIN_SLOT = 240;
+    private static final int GRAIN_MAX = 1536;
 
+    /** Rain as a soft falling sheet: body, roar, sheets and smooth patter (see ambient.ts). */
     static Gen.Voice rain(Map<String, Gen.ParamReader> p, int seed, Model.Segment seg) {
-        Gen.ParamReader intensityP = p.get("intensity"), dropsP = p.get("drops"), brightP = p.get("brightness");
+        Gen.ParamReader intensityP = p.get("intensity"), sheetsP = p.get("sheets"), brightP = p.get("brightness");
         int sL = Hash.seedMix(seed ^ 0x7a11), sR = Hash.seedMix(seed ^ 0x7a12);
-        int dHit = Hash.seedMix(seed ^ 0x3d09), dPos = Hash.seedMix(seed ^ 0x3d11), dTau = Hash.seedMix(seed ^ 0x3d22);
-        int dTone = Hash.seedMix(seed ^ 0x3d33), dNoise = Hash.seedMix(seed ^ 0x3d66), dAmp = Hash.seedMix(seed ^ 0x3d44);
-        int dPan = Hash.seedMix(seed ^ 0x3d55);
+        int sW = seed ^ 0x7a21, sP = seed ^ 0x7a22;
+        int gHit = Hash.seedMix(seed ^ 0x3e01), gPos = Hash.seedMix(seed ^ 0x3e02), gLen = Hash.seedMix(seed ^ 0x3e03);
+        int gAmp = Hash.seedMix(seed ^ 0x3e04), gPan = Hash.seedMix(seed ^ 0x3e05);
         Dsp.Pink pinkL = new Dsp.Pink(), pinkR = new Dsp.Pink();
-        Dsp.LowPass lpL = new Dsp.LowPass(), lpR = new Dsp.LowPass(), hpL = new Dsp.LowPass(), hpR = new Dsp.LowPass();
+        Dsp.LowPass lp1L = new Dsp.LowPass(), lp1R = new Dsp.LowPass(), lp2L = new Dsp.LowPass(), lp2R = new Dsp.LowPass();
+        Dsp.LowPass hpL = new Dsp.LowPass(), hpR = new Dsp.LowPass(), roarL = new Dsp.LowPass(), roarR = new Dsp.LowPass();
+        Dsp.Brown brownL = new Dsp.Brown(), brownR = new Dsp.Brown();
         return Dsp.stateful(new Dsp.StatefulCore() {
+            float[] mL = new float[512], mR = new float[512];
+
             public void reset() {
-                pinkL.reset(); pinkR.reset(); lpL.reset(); lpR.reset(); hpL.reset(); hpR.reset();
+                pinkL.reset(); pinkR.reset(); lp1L.reset(); lp1R.reset(); lp2L.reset(); lp2R.reset();
+                hpL.reset(); hpR.reset(); brownL.reset(); brownR.reset(); roarL.reset(); roarR.reset();
             }
 
             public void run(double start, int n, double sr, float[] L, float[] R) {
                 double t0 = start / sr;
                 double intensity = Dsp.clamp01(intensityP.value(t0));
-                double drops = Dsp.clamp01(dropsP.value(t0));
+                double sheets = Dsp.clamp01(sheetsP.value(t0));
                 double bright = Dsp.clamp01(brightP.value(t0));
-                lpL.setCutoff(1200 + bright * 7000, sr);
-                lpR.setCutoff(1200 + bright * 7000, sr);
-                hpL.setCutoff(250, sr);
-                hpR.setCutoff(250, sr);
-                double bed = 0.35 + 0.9 * intensity;
-                for (int i = 0; i < n; i++) {
-                    double idx = start + i;
-                    double xl = pinkL.step(Hash.fastSigned(sL, idx));
-                    double xr = pinkR.step(Hash.fastSigned(sR, idx));
-                    double yl = lpL.step(xl), yr = lpR.step(xr);
-                    L[i] = (float) ((yl - hpL.step(yl)) * bed);
-                    R[i] = (float) ((yr - hpR.step(yr)) * bed);
+                if (mL.length < n) {
+                    mL = new float[n];
+                    mR = new float[n];
                 }
-                double perSecond = 20 + 900 * drops * (0.3 + intensity);
-                double prob = Math.min(0.9, (perSecond * DROP_SLOT) / sr);
-                double firstSlot = Math.floor((start - DROP_MAX_LEN) / DROP_SLOT);
-                double lastSlot = Math.floor((start + n - 1) / DROP_SLOT);
-                double msToSamples = sr / 1000;
-                for (double slot = firstSlot; slot <= lastSlot; slot++) {
-                    if (Hash.fastUnit(dHit, slot) >= prob) continue;
-                    double r1 = Hash.fastUnit(dPos, slot), r2 = Hash.fastUnit(dTau, slot);
-                    double r3 = Hash.fastUnit(dTone, slot), r4 = Hash.fastUnit(dAmp, slot);
-                    double dropStart = slot * DROP_SLOT + Math.floor(r1 * DROP_SLOT);
-                    double tau = (0.4 + 2.2 * r2) * (1 - 0.35 * bright) * msToSamples;
-                    double len = Math.min(DROP_MAX_LEN, DROP_ATTACK + Math.ceil(tau * 7));
-                    if (dropStart + len <= start || dropStart >= start + n) continue;
-                    double crisp = Dsp.clamp01(bright * 0.8 + r3 * 0.4 - 0.2);
-                    double amp = 0.55 * r4 * r4 * r4 * (0.4 + intensity);
-                    double pan = Hash.fastUnit(dPan, slot);
-                    double gl = Math.min(1, 2 * (1 - pan)), gr = Math.min(1, 2 * pan);
-                    double from = Math.max(start, dropStart);
-                    double to = Math.min(start + n, dropStart + len);
-                    double decay = Math.exp(-1 / tau);
-                    double k0 = from - dropStart;
-                    double env = amp * (k0 < DROP_ATTACK ? 1 : Math.exp(-(k0 - DROP_ATTACK) / tau));
-                    double n1 = Hash.fastSigned(dNoise, from - 1), n2 = Hash.fastSigned(dNoise, from - 2);
+                java.util.Arrays.fill(mL, 0, n, 0f);
+                java.util.Arrays.fill(mR, 0, n, 0f);
+
+                double perSecond = 6 + 60 * intensity;
+                double prob = (perSecond * GRAIN_SLOT) / sr;
+                double depth = 0.9 * (1 - 0.6 * intensity);
+                double firstG = Math.floor((start - GRAIN_MAX) / GRAIN_SLOT);
+                double lastG = Math.floor((start + n - 1) / GRAIN_SLOT);
+                for (double slot = firstG; slot <= lastG; slot++) {
+                    if (Hash.fastUnit(gHit, slot) >= prob) continue;
+                    double at = slot * GRAIN_SLOT + Math.floor(Hash.fastUnit(gPos, slot) * GRAIN_SLOT);
+                    double len = Math.floor((0.005 + 0.027 * Hash.fastUnit(gLen, slot)) * sr);
+                    if (at + len <= start || at >= start + n) continue;
+                    double a = Hash.fastUnit(gAmp, slot);
+                    double amp = depth * (0.25 + 0.75 * a * a);
+                    double pan = Hash.fastUnit(gPan, slot);
+                    double gl = Math.min(1, 2 * (1 - pan)) * amp;
+                    double gr = Math.min(1, 2 * pan) * amp;
+                    double from = Math.max(start, at);
+                    double to = Math.min(start + n, at + len);
                     for (double j = from; j < to; j++) {
-                        double k = j - dropStart;
-                        double n0 = Hash.fastSigned(dNoise, j);
-                        double x = crisp * (n0 - n1) * 0.6 + (1 - crisp) * (n0 + n1 + n2) * 0.4;
-                        double e = k < DROP_ATTACK ? (env * (k + 1)) / DROP_ATTACK : env;
+                        double e = 0.5 - 0.5 * Math.cos((Dsp.TWO_PI * (j - at)) / len);
                         int o = (int) (j - start);
-                        L[o] = (float) (L[o] + x * e * gl);
-                        R[o] = (float) (R[o] + x * e * gr);
-                        if (k >= DROP_ATTACK) env *= decay;
-                        n2 = n1;
-                        n1 = n0;
+                        mL[o] = (float) (mL[o] + e * gl);
+                        mR[o] = (float) (mR[o] + e * gr);
+                    }
+                }
+
+                hpL.setCutoff(300, sr);
+                hpR.setCutoff(300, sr);
+                roarL.setCutoff(260 + 300 * intensity, sr);
+                roarR.setCutoff(260 + 300 * intensity, sr);
+                double body = 0.5 + 1.1 * intensity;
+                double roar = 0.06 + 0.4 * intensity * intensity;
+                for (int i0 = 0; i0 < n; i0 += RAIN_SUB) {
+                    double t = (start + i0) / sr;
+                    double c = 0.6 * Dsp.valueNoise(sW, t, 9) + 0.4 * Dsp.valueNoise(sW ^ 0x31, t, 3.7);
+                    double sweep = Dsp.valueNoise(sP, t, 13) - 0.5;
+                    double lvl = 1 + sheets * (1.6 * c - 0.8);
+                    double wl = lvl * (1 - 0.6 * sheets * sweep);
+                    double wr = lvl * (1 + 0.6 * sheets * sweep);
+                    double fc = (1400 + 4200 * bright) * (0.85 + 0.3 * sheets * c + 0.15 * intensity);
+                    lp1L.setCutoff(fc, sr);
+                    lp1R.setCutoff(fc, sr);
+                    lp2L.setCutoff(fc, sr);
+                    lp2R.setCutoff(fc, sr);
+                    int m = Math.min(n, i0 + RAIN_SUB);
+                    for (int i = i0; i < m; i++) {
+                        double idx = start + i;
+                        double xl = Hash.fastSigned(sL, idx), xr = Hash.fastSigned(sR, idx);
+                        double yl = lp2L.step(lp1L.step(pinkL.step(xl)));
+                        double yr = lp2R.step(lp1R.step(pinkR.step(xr)));
+                        double bl = (yl - hpL.step(yl)) * body * (1 + mL[i]);
+                        double br = (yr - hpR.step(yr)) * body * (1 + mR[i]);
+                        L[i] = (float) ((bl + roarL.step(brownL.step(xl)) * roar) * wl);
+                        R[i] = (float) ((br + roarR.step(brownR.step(xr)) * roar) * wr);
                     }
                 }
             }

@@ -186,7 +186,7 @@ export const TEMPLATES: Template[] = [
     shows: 'Thunder at a low strike rate as an occasional event; tones mixed very low under ambience',
     build: () =>
       timeline('Rainy Window', H8, [
-        track('Rain', 1, [seg('rain', H8, { params: { intensity: 0.4, drops: 0.35, brightness: 0.3 }, gainDb: -13, fadeIn: 30 })]),
+        track('Rain', 1, [seg('rain', H8, { params: { intensity: 0.4, sheets: 0.4, brightness: 0.3 }, gainDb: -13, fadeIn: 30 })]),
         track('Distant thunder', 4, [
           seg('thunder', H8, { params: { rate: 2, distance: 0.88, intensity: 0.45, variety: 0.3 }, gainDb: -15, fadeIn: 5, fadeOut: 5 }),
         ]),
@@ -203,7 +203,7 @@ export const TEMPLATES: Template[] = [
       timeline('Thunderstorm', H8, [
         track('Rain', 1, [
           seg('rain', H8, {
-            params: { intensity: 0.65, drops: 0.5, brightness: 0.45 },
+            params: { intensity: 0.65, sheets: 0.6, brightness: 0.45 },
             gainDb: -13,
             auto: { intensity: pts([0, 0.65], [3 * HOUR, 0.35]) },
           }),
@@ -488,15 +488,18 @@ export const TEMPLATES: Template[] = [
     name: 'Storm Passing',
     category: 'Ambience',
     description: '2 h · a storm rolls in, peaks after 40 minutes, then moves away',
-    shows: 'Rise-and-fall automation on several settings at once (rain, thunder, wind)',
+    shows: 'Rise-and-fall automation on several settings at once (rain, sheets, thunder, wind), and a sound that starts late',
     build: () => {
       const d = 2 * HOUR;
       return timeline('Storm Passing', d, [
         track('Rain', 1, [
           seg('rain', d, {
-            params: { intensity: 0.2, drops: 0.5, brightness: 0.45 },
+            params: { intensity: 0.2, sheets: 0.7, brightness: 0.45 },
             gainDb: -13,
-            auto: { intensity: pts([0, 0.15], [40 * MIN, 0.85], [d, 0.15]) },
+            auto: {
+              intensity: pts([0, 0.15], [40 * MIN, 0.85], [d, 0.15]),
+              sheets: pts([0, 0.4], [40 * MIN, 0.9], [d, 0.3]),
+            },
           }),
         ]),
         track('Thunder', 4, [
@@ -513,6 +516,10 @@ export const TEMPLATES: Template[] = [
             gainDb: -17,
             auto: { strength: pts([0, 0.2], [40 * MIN, 0.65], [d, 0.2]) },
           }),
+        ]),
+        // once the storm has passed, the crickets come back out
+        track('Crickets', 5, [
+          seg('crickets', d, { start: 85 * MIN, params: { crickets: 6, rate: 1.8, pitch: 0.45, rests: 0.35 }, gainDb: -24, fadeIn: 8 * MIN }),
         ]),
       ]);
     },

@@ -72,7 +72,7 @@ public final class Gen {
         register(new Def("tone", new String[] {"freq"}, new double[] {432}, Tones::tone));
         register(new Def("noise", new String[] {"color", "width", "tone"}, new double[] {1, 1, 0}, Tones::noise));
         register(trimmed(new Def("fan", new String[] {"speed", "tone", "wobble"}, new double[] {0.5, 0.4, 0.3}, Ambient::fan), 0.49));
-        register(trimmed(new Def("rain", new String[] {"intensity", "drops", "brightness"}, new double[] {0.5, 0.5, 0.5}, Ambient::rain), 1.53));
+        register(trimmed(new Def("rain", new String[] {"intensity", "sheets", "brightness"}, new double[] {0.5, 0.5, 0.4}, Ambient::rain), 1.4));
         register(trimmed(new Def("thunder", new String[] {"rate", "distance", "intensity", "variety"}, new double[] {8, 0.5, 0.7, 0.6}, Thunder::create), 0.5));
         register(trimmed(new Def("wind", new String[] {"strength", "gusts", "pitch"}, new double[] {0.5, 0.5, 0.4}, Ambient::wind), 1.42));
         register(trimmed(new Def("ocean", new String[] {"period", "size", "closeness"}, new double[] {9, 0.6, 0.5}, Ambient::ocean), 0.96));

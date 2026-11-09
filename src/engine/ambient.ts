@@ -86,110 +86,133 @@ const fan: GeneratorDef = {
 
 // ------------------------------------------------------------------ rain
 
-const DROP_SLOT = 48; // samples per drop slot (1 ms at 48 kHz)
-const DROP_MAX_LEN = 1024; // samples a drop can last (~21 ms)
-const DROP_ATTACK = 12; // samples (0.25 ms): a sharp, click-like onset
+const RAIN_SUB = 32; // samples per control step (sheets, filter cutoffs)
+const GRAIN_SLOT = 240; // samples per patter slot (5 ms at 48 kHz)
+const GRAIN_MAX = 1536; // longest patter grain (samples, 32 ms)
 
+/**
+ * Rain as a soft, falling sheet of water rather than separate drops.
+ *  - the body: pink noise through a gentle two-pole low-pass (no sizzle);
+ *  - the roar: a low wash that grows with heavier rain;
+ *  - sheets: slow waves of heavier and lighter rain that sweep across the
+ *    stereo field, brightening a little as they swell;
+ *  - patter: faint, smooth-edged swells in the body (Hann grains, never clicks).
+ */
 const rain: GeneratorDef = {
   type: 'rain',
   label: 'Rain',
   params: [
     { name: 'intensity', label: 'Intensity', unit: '', min: 0, max: 1, default: 0.5 },
-    { name: 'drops', label: 'Drops', unit: '', min: 0, max: 1, default: 0.5 },
-    { name: 'brightness', label: 'Brightness', unit: '', min: 0, max: 1, default: 0.5 },
+    { name: 'sheets', label: 'Sheets (waves of rain)', unit: '', min: 0, max: 1, default: 0.5 },
+    { name: 'brightness', label: 'Brightness', unit: '', min: 0, max: 1, default: 0.4 },
   ],
   create: (p, seed) => {
     const sL = seedMix(seed ^ 0x7a11);
     const sR = seedMix(seed ^ 0x7a12);
-    // pre-mixed seeds for the per-slot drop decisions (one hash round each)
-    const dHit = seedMix(seed ^ 0x3d09);
-    const dPos = seedMix(seed ^ 0x3d11);
-    const dTau = seedMix(seed ^ 0x3d22);
-    const dTone = seedMix(seed ^ 0x3d33);
-    const dNoise = seedMix(seed ^ 0x3d66);
-    const dAmp = seedMix(seed ^ 0x3d44);
-    const dPan = seedMix(seed ^ 0x3d55);
+    const sW = seed ^ 0x7a21; // sheet swells
+    const sP = seed ^ 0x7a22; // sheet sweep across the stereo field
+    const gHit = seedMix(seed ^ 0x3e01);
+    const gPos = seedMix(seed ^ 0x3e02);
+    const gLen = seedMix(seed ^ 0x3e03);
+    const gAmp = seedMix(seed ^ 0x3e04);
+    const gPan = seedMix(seed ^ 0x3e05);
     const pinkL = new Pink();
     const pinkR = new Pink();
-    const lpL = new LowPass();
-    const lpR = new LowPass();
+    const lp1L = new LowPass();
+    const lp1R = new LowPass();
+    const lp2L = new LowPass();
+    const lp2R = new LowPass();
     const hpL = new LowPass();
     const hpR = new LowPass();
+    const brownL = new Brown();
+    const brownR = new Brown();
+    const roarL = new LowPass();
+    const roarR = new LowPass();
+    let mL = new Float32Array(512);
+    let mR = new Float32Array(512);
     return stateful({
       reset() {
         pinkL.reset();
         pinkR.reset();
-        lpL.reset();
-        lpR.reset();
+        lp1L.reset();
+        lp1R.reset();
+        lp2L.reset();
+        lp2R.reset();
         hpL.reset();
         hpR.reset();
+        brownL.reset();
+        brownR.reset();
+        roarL.reset();
+        roarR.reset();
       },
       run(start, n, sr, L, R) {
         const t0 = start / sr;
         const intensity = clamp01(p.intensity.value(t0));
-        const drops = clamp01(p.drops.value(t0));
+        const sheets = clamp01(p.sheets.value(t0));
         const bright = clamp01(p.brightness.value(t0));
-        lpL.setCutoff(1200 + bright * 7000, sr);
-        lpR.setCutoff(1200 + bright * 7000, sr);
-        hpL.setCutoff(250, sr);
-        hpR.setCutoff(250, sr);
-        const bed = 0.35 + 0.9 * intensity;
+        if (mL.length < n) {
+          mL = new Float32Array(n);
+          mR = new Float32Array(n);
+        }
+        mL.fill(0, 0, n);
+        mR.fill(0, 0, n);
 
-        // the steady "hiss" of rain
-        for (let i = 0; i < n; i++) {
-          const idx = start + i;
-          const xl = pinkL.step(fastSigned(sL, idx));
-          const xr = pinkR.step(fastSigned(sR, idx));
-          const yl = lpL.step(xl);
-          const yr = lpR.step(xr);
-          L[i] = (yl - hpL.step(yl)) * bed;
-          R[i] = (yr - hpR.step(yr)) * bed;
+        // Patter: soft swells of the body, 5–32 ms, with a Hann envelope.
+        // Light rain patters more; heavy rain blurs into one sheet.
+        const perSecond = 6 + 60 * intensity;
+        const prob = (perSecond * GRAIN_SLOT) / sr;
+        const depth = 0.9 * (1 - 0.6 * intensity);
+        const firstG = Math.floor((start - GRAIN_MAX) / GRAIN_SLOT);
+        const lastG = Math.floor((start + n - 1) / GRAIN_SLOT);
+        for (let slot = firstG; slot <= lastG; slot++) {
+          if (fastUnit(gHit, slot) >= prob) continue;
+          const at = slot * GRAIN_SLOT + Math.floor(fastUnit(gPos, slot) * GRAIN_SLOT);
+          const len = Math.floor((0.005 + 0.027 * fastUnit(gLen, slot)) * sr);
+          if (at + len <= start || at >= start + n) continue;
+          const a = fastUnit(gAmp, slot);
+          const amp = depth * (0.25 + 0.75 * a * a);
+          const pan = fastUnit(gPan, slot);
+          const gl = Math.min(1, 2 * (1 - pan)) * amp;
+          const gr = Math.min(1, 2 * pan) * amp;
+          const from = Math.max(start, at);
+          const to = Math.min(start + n, at + len);
+          for (let j = from; j < to; j++) {
+            const e = 0.5 - 0.5 * Math.cos((TWO_PI * (j - at)) / len);
+            mL[j - start] += e * gl;
+            mR[j - start] += e * gr;
+          }
         }
 
-        // Individual drops: each 1 ms slot may hold one, decided by its hash.
-        // A drop is a short burst of noise (an impact), never a tone: a sharp
-        // onset and a few-millisecond decay. Most are faint, a few are close.
-        const perSecond = 20 + 900 * drops * (0.3 + intensity);
-        const prob = Math.min(0.9, (perSecond * DROP_SLOT) / sr);
-        const firstSlot = Math.floor((start - DROP_MAX_LEN) / DROP_SLOT);
-        const lastSlot = Math.floor((start + n - 1) / DROP_SLOT);
-        const msToSamples = sr / 1000;
-        for (let slot = firstSlot; slot <= lastSlot; slot++) {
-          if (fastUnit(dHit, slot) >= prob) continue;
-          const r1 = fastUnit(dPos, slot);
-          const r2 = fastUnit(dTau, slot);
-          const r3 = fastUnit(dTone, slot);
-          const r4 = fastUnit(dAmp, slot);
-          const dropStart = slot * DROP_SLOT + Math.floor(r1 * DROP_SLOT);
-          // decay 0.4–2.6 ms; brighter surfaces ring a little shorter
-          const tau = (0.4 + 2.2 * r2) * (1 - 0.35 * bright) * msToSamples;
-          const len = Math.min(DROP_MAX_LEN, DROP_ATTACK + Math.ceil(tau * 7));
-          if (dropStart + len <= start || dropStart >= start + n) continue;
-          // 0 = dull pat (leaves, soil) … 1 = crisp tap (window, roof)
-          const crisp = clamp01(bright * 0.8 + r3 * 0.4 - 0.2);
-          const amp = 0.55 * r4 * r4 * r4 * (0.4 + intensity);
-          const pan = fastUnit(dPan, slot);
-          const gl = Math.min(1, 2 * (1 - pan));
-          const gr = Math.min(1, 2 * pan);
-          const from = Math.max(start, dropStart);
-          const to = Math.min(start + n, dropStart + len);
-          const decay = Math.exp(-1 / tau);
-          const k0 = from - dropStart;
-          let env = amp * (k0 < DROP_ATTACK ? 1 : Math.exp(-(k0 - DROP_ATTACK) / tau));
-          // noise for this drop, by absolute sample index (stateless and seekable)
-          let n1 = fastSigned(dNoise, from - 1);
-          let n2 = fastSigned(dNoise, from - 2);
-          for (let j = from; j < to; j++) {
-            const k = j - dropStart;
-            const n0 = fastSigned(dNoise, j);
-            // crisp: first difference (high-pass); dull: 3-tap average (low-pass)
-            const x = crisp * (n0 - n1) * 0.6 + (1 - crisp) * (n0 + n1 + n2) * 0.4;
-            const e = k < DROP_ATTACK ? (env * (k + 1)) / DROP_ATTACK : env;
-            L[j - start] += x * e * gl;
-            R[j - start] += x * e * gr;
-            if (k >= DROP_ATTACK) env *= decay;
-            n2 = n1;
-            n1 = n0;
+        hpL.setCutoff(300, sr);
+        hpR.setCutoff(300, sr);
+        roarL.setCutoff(260 + 300 * intensity, sr);
+        roarR.setCutoff(260 + 300 * intensity, sr);
+        const body = 0.5 + 1.1 * intensity;
+        const roar = 0.06 + 0.4 * intensity * intensity;
+        for (let i0 = 0; i0 < n; i0 += RAIN_SUB) {
+          const t = (start + i0) / sr;
+          // the sheets: slow swells (9 s and 3.7 s curves) sweeping across the field
+          const c = 0.6 * valueNoise(sW, t, 9) + 0.4 * valueNoise(sW ^ 0x31, t, 3.7);
+          const sweep = valueNoise(sP, t, 13) - 0.5;
+          const lvl = 1 + sheets * (1.6 * c - 0.8);
+          const wl = lvl * (1 - 0.6 * sheets * sweep);
+          const wr = lvl * (1 + 0.6 * sheets * sweep);
+          const fc = (1400 + 4200 * bright) * (0.85 + 0.3 * sheets * c + 0.15 * intensity);
+          lp1L.setCutoff(fc, sr);
+          lp1R.setCutoff(fc, sr);
+          lp2L.setCutoff(fc, sr);
+          lp2R.setCutoff(fc, sr);
+          const m = Math.min(n, i0 + RAIN_SUB);
+          for (let i = i0; i < m; i++) {
+            const idx = start + i;
+            const xl = fastSigned(sL, idx);
+            const xr = fastSigned(sR, idx);
+            const yl = lp2L.step(lp1L.step(pinkL.step(xl)));
+            const yr = lp2R.step(lp1R.step(pinkR.step(xr)));
+            const bl = (yl - hpL.step(yl)) * body * (1 + mL[i]!);
+            const br = (yr - hpR.step(yr)) * body * (1 + mR[i]!);
+            L[i] = (bl + roarL.step(brownL.step(xl)) * roar) * wl;
+            R[i] = (br + roarR.step(brownR.step(xr)) * roar) * wr;
           }
         }
       },
@@ -373,7 +396,7 @@ function trimmed(def: GeneratorDef, k: number): GeneratorDef {
 
 export const AMBIENT_GENERATORS = {
   fan: trimmed(fan, 0.49),
-  rain: trimmed(rain, 1.53),
+  rain: trimmed(rain, 1.4),
   thunder: trimmed(thunder, 0.5),
   wind: trimmed(wind, 1.42),
   ocean: trimmed(ocean, 0.96),
