@@ -8,7 +8,9 @@
 //      growl    a low, muffled growl far away
 //      skyroll  a long roll (30–45 s) travelling across the sky
 //  - its own timbre (filter), stereo width and movement across the field,
-//  - a "grumbling" texture inside the rolls (irregular bumps, not smooth swells).
+//  - a rolling texture made of separate arrivals: the sound of each part of the
+//    bolt reaches you at its own time, so a roll is a string of low booms, each
+//    with a quick hit and a short fade (smooth swells alone sound like wind).
 // Strikes come in bursts and lulls following a slowly drifting storm-activity
 // curve around the strikes-per-hour setting. "Variety" goes from a steady,
 // uniform storm (0) to a wild, mixed one (1).
@@ -44,8 +46,10 @@ export type Strike = {
   thump: number;
   panFrom: number;
   panTo: number;
-  grumbleRate: number;
-  grumbleDepth: number;
+  /** Arrivals per second at the height of a roll. */
+  arrRate: number;
+  /** Typical fade of one arrival (s). */
+  arrDecay: number;
   grumbleSeed: number;
   level: number;
 };
@@ -99,8 +103,8 @@ export function strikeFor(seed: number, slot: number, perHour: number, distance:
   let thump = 0;
   let panTo = pan0;
   let width: number;
-  let grumbleRate: number;
-  let grumbleDepth: number;
+  let arrRate: number;
+  let arrDecay: number;
   let level = 1;
 
   switch (type) {
@@ -115,8 +119,8 @@ export function strikeFor(seed: number, slot: number, perHour: number, distance:
       cutoff = 320 + 900 * near;
       width = 0.8;
       panTo = pan0 + (r() - 0.5) * 0.3;
-      grumbleRate = between(r(), 7, 14);
-      grumbleDepth = 0.35;
+      arrRate = between(r(), 7, 12);
+      arrDecay = 0.16;
       break;
     }
     case 'flicker': {
@@ -133,8 +137,8 @@ export function strikeFor(seed: number, slot: number, perHour: number, distance:
       cutoff = 360 + 800 * near;
       width = 0.85;
       panTo = pan0 + (r() - 0.5) * 0.5;
-      grumbleRate = between(r(), 8, 15);
-      grumbleDepth = 0.3;
+      arrRate = between(r(), 8, 14);
+      arrDecay = 0.12;
       break;
     }
     case 'rumble': {
@@ -152,8 +156,8 @@ export function strikeFor(seed: number, slot: number, perHour: number, distance:
       cutoff = 160 + 620 * near;
       width = 0.9;
       panTo = pan0 + (r() < 0.5 ? -1 : 1) * between(r(), 0.3, 0.8);
-      grumbleRate = between(r(), 4, 10);
-      grumbleDepth = 0.5;
+      arrRate = between(r(), 5, 9);
+      arrDecay = 0.22;
       break;
     }
     case 'growl': {
@@ -164,8 +168,8 @@ export function strikeFor(seed: number, slot: number, perHour: number, distance:
       cutoff = 70 + 180 * near;
       width = 0.55;
       panTo = pan0 + (r() - 0.5) * 0.4;
-      grumbleRate = between(r(), 3, 7);
-      grumbleDepth = 0.45;
+      arrRate = between(r(), 3, 6);
+      arrDecay = 0.3;
       level = 0.8;
       break;
     }
@@ -180,11 +184,11 @@ export function strikeFor(seed: number, slot: number, perHour: number, distance:
       // travels across the whole sky, one side to the other
       const side = r() < 0.5 ? -1 : 1;
       panTo = -side * 0.8;
-      grumbleRate = between(r(), 5, 12);
-      grumbleDepth = 0.55;
+      arrRate = between(r(), 4, 8);
+      arrDecay = 0.25;
       return {
         slot, type, start, dur, near, cutoff, width, rolls: rolls.map((x) => ({ ...x, at: x.at + delay })), cracks,
-        thump: 0, panFrom: side * 0.8, panTo, grumbleRate, grumbleDepth, grumbleSeed: hashSeed(seed, slot), level: 0.9,
+        thump: 0, panFrom: side * 0.8, panTo, arrRate, arrDecay, grumbleSeed: hashSeed(seed, slot), level: 0.9,
       };
     }
   }
@@ -194,7 +198,7 @@ export function strikeFor(seed: number, slot: number, perHour: number, distance:
     slot, type, start, dur, near, cutoff, width,
     rolls: rolls.map((x) => ({ ...x, at: x.at + delay })),
     cracks: cracks.map((x) => ({ ...x, at: x.at + delay * 0.2 })),
-    thump, panFrom: pan0, panTo, grumbleRate, grumbleDepth, grumbleSeed: hashSeed(seed, slot), level,
+    thump, panFrom: pan0, panTo, arrRate, arrDecay, grumbleSeed: hashSeed(seed, slot), level,
   };
 }
 
@@ -202,10 +206,11 @@ function hashSeed(seed: number, slot: number) {
   return Math.floor(rand01(seed ^ 0x51ed27, slot) * 2 ** 31);
 }
 
-/** Rumble envelope (sum of rolls, with grumble texture) at time t. Time-pure. */
-export function rumbleEnvelope(s: Strike, t: number): number {
-  const x = t - s.start;
-  if (x < 0 || x > s.dur + TAIL) return 0;
+const ARR_SLOT = 0.05; // s per arrival slot
+const ARR_BACK = 40; // slots looked back (2 s covers the longest arrival fade)
+
+/** The smooth shape of a strike's rolls at strike-local time x. */
+function rollsAt(s: Strike, x: number): number {
   let e = 0;
   for (const r of s.rolls) {
     const u = x - r.at;
@@ -214,14 +219,93 @@ export function rumbleEnvelope(s: Strike, t: number): number {
     const d = u < r.attack ? 1 : Math.exp(-(u - r.attack) / r.decay);
     e += r.amp * a * d;
   }
-  if (e === 0) return 0;
-  // irregular grumbling: bumps a few times a second, never periodic
-  const g = valueNoise(s.grumbleSeed, x, 1 / s.grumbleRate);
-  const grumble = 1 - s.grumbleDepth + s.grumbleDepth * 2.2 * g * g;
-  const tail = x > s.dur ? Math.max(0, 1 - (x - s.dur) / TAIL) : 1;
   // many overlapping rolls shouldn't pile up into one huge peak
-  const norm = Math.sqrt(Math.max(1, s.rolls.length / 2));
-  return (e / norm) * grumble * tail * s.level;
+  return e / Math.sqrt(Math.max(1, s.rolls.length / 2));
+}
+
+/**
+ * Rumble envelope at time t: a quiet bed following the rolls, plus separate
+ * arrivals (quick hit, short fade) scattered through them, denser and louder
+ * where the rolls are strong. Time-pure.
+ */
+export function rumbleEnvelope(s: Strike, t: number): number {
+  const x = t - s.start;
+  if (x < 0 || x > s.dur + TAIL) return 0;
+  const base = rollsAt(s, x);
+  // close strikes hit hard; far ones arrive softened
+  const att = 0.006 + 0.04 * (1 - s.near);
+  const pMax = Math.min(0.9, s.arrRate * ARR_SLOT);
+  let a = 0;
+  const q1 = Math.floor(x / ARR_SLOT);
+  for (let q = q1; q > q1 - ARR_BACK && q >= 0; q--) {
+    const hit = rand01(s.grumbleSeed, q * 4 + 1);
+    if (hit >= pMax) continue;
+    const at = (q + rand01(s.grumbleSeed, q * 4)) * ARR_SLOT;
+    const u = x - at;
+    if (u < 0) continue;
+    const env0 = rollsAt(s, at);
+    if (hit >= pMax * Math.min(1, env0 * 1.5)) continue;
+    const k = rand01(s.grumbleSeed, q * 4 + 2);
+    const amp = env0 * (0.3 + 1.6 * k * k * k);
+    const tau = s.arrDecay * (0.5 + rand01(s.grumbleSeed, q * 4 + 3));
+    const rise = u < att ? 0.5 - 0.5 * Math.cos((Math.PI * u) / att) : 1;
+    a += amp * rise * Math.exp(-Math.max(0, u - att) / tau);
+  }
+  if (base === 0 && a === 0) return 0;
+  const tail = x > s.dur ? Math.max(0, 1 - (x - s.dur) / TAIL) : 1;
+  return (0.23 * base + 0.52 * a) * tail * s.level;
+}
+
+const MAX_ARR = 48; // most arrivals tracked per strike at once
+
+/**
+ * The arrivals of `s` that have started by strike-local time x and may still
+ * sound, written to `out` from `off` as [at, amp, tau, f]. Returns how many.
+ */
+function arrivalsAt(s: Strike, x: number, out: Float64Array, off: number): number {
+  const att = 0.006 + 0.04 * (1 - s.near);
+  const pMax = Math.min(0.9, s.arrRate * ARR_SLOT);
+  let c = 0;
+  const q1 = Math.floor(x / ARR_SLOT);
+  for (let q = q1; q > q1 - ARR_BACK && q >= 0 && c < MAX_ARR; q--) {
+    const hit = rand01(s.grumbleSeed, q * 4 + 1);
+    if (hit >= pMax) continue;
+    const at = (q + rand01(s.grumbleSeed, q * 4)) * ARR_SLOT;
+    if (at > x) continue;
+    const env0 = rollsAt(s, at);
+    if (hit >= pMax * Math.min(1, env0 * 1.5)) continue;
+    const tau = s.arrDecay * (0.5 + rand01(s.grumbleSeed, q * 4 + 3));
+    if (x - at - att > tau * 6) continue;
+    const k = rand01(s.grumbleSeed, q * 4 + 2);
+    const o = off + c * 4;
+    out[o] = at;
+    out[o + 1] = env0 * (0.3 + 1.6 * k * k * k);
+    out[o + 2] = tau;
+    // each arrival is a low pressure wave: deeper from far away
+    out[o + 3] = (38 + 52 * s.near) * (0.75 + 0.5 * rand01(s.grumbleSeed ^ 0x5a5a, q));
+    c++;
+  }
+  return c;
+}
+
+/** The booms of the arrivals in `buf` at strike-local time x: short low tones whose pitch falls. */
+function boomAt(s: Strike, buf: Float64Array, off: number, count: number, x: number): number {
+  const att = 0.006 + 0.04 * (1 - s.near);
+  let y = 0;
+  for (let j = 0; j < count; j++) {
+    const o = off + j * 4;
+    const u = x - buf[o];
+    if (u < 0) continue;
+    const tau = buf[o + 2];
+    if (u - att > tau * 6) continue;
+    const f = buf[o + 3];
+    const rise = u < att ? 0.5 - 0.5 * Math.cos((Math.PI * u) / att) : 1;
+    const env = buf[o + 1] * rise * Math.exp(-Math.max(0, u - att) / tau);
+    // starts half an octave up and settles (exact phase integral)
+    const ph = f * u + f * 0.5 * 0.06 * (1 - Math.exp(-u / 0.06));
+    y += env * Math.sin(TWO_PI * ph);
+  }
+  return y;
 }
 
 function crackEnvelope(s: Strike, t: number): number {
@@ -274,6 +358,8 @@ export const thunder: GeneratorDef = {
     const crB = new Float64Array(LOOKBACK);
     const panL = new Float64Array(LOOKBACK);
     const panR = new Float64Array(LOOKBACK);
+    const arrBuf = new Float64Array(LOOKBACK * MAX_ARR * 4);
+    const arrN = new Int32Array(LOOKBACK);
     let lastSlot = NaN;
     let lastRate = NaN;
     let lastDistance = NaN;
@@ -338,6 +424,7 @@ export const thunder: GeneratorDef = {
         }
 
         const gain = 3.6 * (0.35 + 0.65 * intensity);
+        const boomGain = gain * 0.52 * 0.3;
         for (let i0 = 0; i0 < n; i0 += SUB) {
           const m = Math.min(n, i0 + SUB);
           const ta = (start + i0) / sr;
@@ -346,9 +433,11 @@ export const thunder: GeneratorDef = {
             const s = strikes[k];
             if (!s || s.start > tb || strikeEnd(s) < ta) {
               envA[k] = envB[k] = crA[k] = crB[k] = 0;
+              arrN[k] = 0;
               continue;
             }
             envA[k] = rumbleEnvelope(s, ta);
+            arrN[k] = arrivalsAt(s, tb - s.start, arrBuf, k * MAX_ARR * 4);
             envB[k] = rumbleEnvelope(s, tb);
             crA[k] = crackEnvelope(s, ta);
             crB[k] = crackEnvelope(s, tb);
@@ -376,15 +465,16 @@ export const thunder: GeneratorDef = {
               const e = envA[k] + (envB[k] - envA[k]) * f;
               const c = crA[k] + (crB[k] - crA[k]) * f;
               const th = thumpAt(s, t);
-              if (e === 0 && c === 0 && th === 0) continue;
+              const bm = arrN[k] > 0 ? boomAt(s, arrBuf, k * MAX_ARR * 4, arrN[k], t - s.start) * boomGain * (0.5 + 0.5 * s.near) * s.level : 0;
+              if (e === 0 && c === 0 && th === 0 && bm === 0) continue;
               const st = stateFor(s, sr);
               const nl = st.l2.step(st.l1.step(bl));
               const nr = st.r2.step(st.r1.step(br));
               // stereo width: distant strikes are narrower
               const a = 0.5 + 0.5 * s.width;
               const b = 0.5 - 0.5 * s.width;
-              const ml = (nl * a + nr * b) * e * gain + crackNoise * c + th * 0.5;
-              const mr = (nr * a + nl * b) * e * gain + crackNoise * c + th * 0.5;
+              const ml = (nl * a + nr * b) * e * gain + crackNoise * c + th * 0.5 + bm;
+              const mr = (nr * a + nl * b) * e * gain + crackNoise * c + th * 0.5 + bm;
               l += ml * panL[k];
               r += mr * panR[k];
             }

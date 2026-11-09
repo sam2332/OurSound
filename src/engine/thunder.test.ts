@@ -69,7 +69,7 @@ describe('thunder variety', () => {
     }
   });
 
-  it('rumbles grumble (irregular bumps) instead of swelling smoothly', () => {
+  it('rumbles roll in separate booms instead of swelling smoothly (like wind)', () => {
     const s = strikes(30, 0.5, 0.6).find((x) => x.type === 'rumble')!;
     let peaks = 0;
     let prev = rumbleEnvelope(s, s.start);

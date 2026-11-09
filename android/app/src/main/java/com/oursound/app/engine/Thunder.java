@@ -36,7 +36,7 @@ public final class Thunder {
     public static final class Strike {
         public double slot;
         public int type;
-        public double start, dur, near, cutoff, width, thump, panFrom, panTo, grumbleRate, grumbleDepth, level;
+        public double start, dur, near, cutoff, width, thump, panFrom, panTo, arrRate, arrDecay, level;
         public int grumbleSeed;
         Roll[] rolls;
         Crack[] cracks;
@@ -91,7 +91,7 @@ public final class Thunder {
         double pan0 = (r.getAsDouble() - 0.5) * 1.2;
         List<Roll> rolls = new ArrayList<>();
         List<Crack> cracks = new ArrayList<>();
-        double dur, cutoff, thump = 0, panTo = pan0, width, grumbleRate, grumbleDepth, level = 1;
+        double dur, cutoff, thump = 0, panTo = pan0, width, arrRate, arrDecay, level = 1;
 
         Strike s = new Strike();
         s.slot = slot;
@@ -115,8 +115,8 @@ public final class Thunder {
                 cutoff = 320 + 900 * near;
                 width = 0.8;
                 panTo = pan0 + (r.getAsDouble() - 0.5) * 0.3;
-                grumbleRate = between(r.getAsDouble(), 7, 14);
-                grumbleDepth = 0.35;
+                arrRate = between(r.getAsDouble(), 7, 12);
+                arrDecay = 0.16;
                 break;
             }
             case FLICKER: {
@@ -140,8 +140,8 @@ public final class Thunder {
                 cutoff = 360 + 800 * near;
                 width = 0.85;
                 panTo = pan0 + (r.getAsDouble() - 0.5) * 0.5;
-                grumbleRate = between(r.getAsDouble(), 8, 15);
-                grumbleDepth = 0.3;
+                arrRate = between(r.getAsDouble(), 8, 14);
+                arrDecay = 0.12;
                 break;
             }
             case RUMBLE: {
@@ -160,8 +160,8 @@ public final class Thunder {
                 width = 0.9;
                 double dir = r.getAsDouble() < 0.5 ? -1 : 1;
                 panTo = pan0 + dir * between(r.getAsDouble(), 0.3, 0.8);
-                grumbleRate = between(r.getAsDouble(), 4, 10);
-                grumbleDepth = 0.5;
+                arrRate = between(r.getAsDouble(), 5, 9);
+                arrDecay = 0.22;
                 break;
             }
             case GROWL: {
@@ -177,8 +177,8 @@ public final class Thunder {
                 cutoff = 70 + 180 * near;
                 width = 0.55;
                 panTo = pan0 + (r.getAsDouble() - 0.5) * 0.4;
-                grumbleRate = between(r.getAsDouble(), 3, 7);
-                grumbleDepth = 0.45;
+                arrRate = between(r.getAsDouble(), 3, 6);
+                arrDecay = 0.3;
                 level = 0.8;
                 break;
             }
@@ -196,8 +196,8 @@ public final class Thunder {
                 s.width = 1;
                 double side = r.getAsDouble() < 0.5 ? -1 : 1;
                 s.panTo = -side * 0.8;
-                s.grumbleRate = between(r.getAsDouble(), 5, 12);
-                s.grumbleDepth = 0.55;
+                s.arrRate = between(r.getAsDouble(), 4, 8);
+                s.arrDecay = 0.25;
                 s.dur = dur;
                 s.thump = 0;
                 s.panFrom = side * 0.8;
@@ -220,16 +220,17 @@ public final class Thunder {
         s.thump = thump;
         s.panFrom = pan0;
         s.panTo = panTo;
-        s.grumbleRate = grumbleRate;
-        s.grumbleDepth = grumbleDepth;
+        s.arrRate = arrRate;
+        s.arrDecay = arrDecay;
         s.grumbleSeed = hashSeed(seed, slot);
         s.level = level;
         return s;
     }
 
-    static double rumbleEnvelope(Strike s, double t) {
-        double x = t - s.start;
-        if (x < 0 || x > s.dur + TAIL) return 0;
+    private static final double ARR_SLOT = 0.05;
+    private static final int ARR_BACK = 40;
+
+    private static double rollsAt(Strike s, double x) {
         double e = 0;
         for (Roll r : s.rolls) {
             double u = x - r.at;
@@ -238,12 +239,80 @@ public final class Thunder {
             double d = u < r.attack ? 1 : Math.exp(-(u - r.attack) / r.decay);
             e += r.amp * a * d;
         }
-        if (e == 0) return 0;
-        double g = Dsp.valueNoise(s.grumbleSeed, x, 1 / s.grumbleRate);
-        double grumble = 1 - s.grumbleDepth + s.grumbleDepth * 2.2 * g * g;
+        return e / Math.sqrt(Math.max(1, s.rolls.length / 2.0));
+    }
+
+    /** Rolls as a bed plus separate arrivals (quick hit, short fade); see thunder.ts. */
+    static double rumbleEnvelope(Strike s, double t) {
+        double x = t - s.start;
+        if (x < 0 || x > s.dur + TAIL) return 0;
+        double base = rollsAt(s, x);
+        double att = 0.006 + 0.04 * (1 - s.near);
+        double pMax = Math.min(0.9, s.arrRate * ARR_SLOT);
+        double a = 0;
+        double q1 = Math.floor(x / ARR_SLOT);
+        for (double q = q1; q > q1 - ARR_BACK && q >= 0; q--) {
+            double hit = Hash.rand01(s.grumbleSeed, q * 4 + 1);
+            if (hit >= pMax) continue;
+            double at = (q + Hash.rand01(s.grumbleSeed, q * 4)) * ARR_SLOT;
+            double u = x - at;
+            if (u < 0) continue;
+            double env0 = rollsAt(s, at);
+            if (hit >= pMax * Math.min(1, env0 * 1.5)) continue;
+            double k = Hash.rand01(s.grumbleSeed, q * 4 + 2);
+            double amp = env0 * (0.3 + 1.6 * k * k * k);
+            double tau = s.arrDecay * (0.5 + Hash.rand01(s.grumbleSeed, q * 4 + 3));
+            double rise = u < att ? 0.5 - 0.5 * Math.cos((Math.PI * u) / att) : 1;
+            a += amp * rise * Math.exp(-Math.max(0, u - att) / tau);
+        }
+        if (base == 0 && a == 0) return 0;
         double tail = x > s.dur ? Math.max(0, 1 - (x - s.dur) / TAIL) : 1;
-        double norm = Math.sqrt(Math.max(1, s.rolls.length / 2.0));
-        return (e / norm) * grumble * tail * s.level;
+        return (0.23 * base + 0.52 * a) * tail * s.level;
+    }
+
+    private static final int MAX_ARR = 48;
+
+    private static int arrivalsAt(Strike s, double x, double[] out, int off) {
+        double att = 0.006 + 0.04 * (1 - s.near);
+        double pMax = Math.min(0.9, s.arrRate * ARR_SLOT);
+        int c = 0;
+        double q1 = Math.floor(x / ARR_SLOT);
+        for (double q = q1; q > q1 - ARR_BACK && q >= 0 && c < MAX_ARR; q--) {
+            double hit = Hash.rand01(s.grumbleSeed, q * 4 + 1);
+            if (hit >= pMax) continue;
+            double at = (q + Hash.rand01(s.grumbleSeed, q * 4)) * ARR_SLOT;
+            if (at > x) continue;
+            double env0 = rollsAt(s, at);
+            if (hit >= pMax * Math.min(1, env0 * 1.5)) continue;
+            double tau = s.arrDecay * (0.5 + Hash.rand01(s.grumbleSeed, q * 4 + 3));
+            if (x - at - att > tau * 6) continue;
+            double k = Hash.rand01(s.grumbleSeed, q * 4 + 2);
+            int o = off + c * 4;
+            out[o] = at;
+            out[o + 1] = env0 * (0.3 + 1.6 * k * k * k);
+            out[o + 2] = tau;
+            out[o + 3] = (38 + 52 * s.near) * (0.75 + 0.5 * Hash.rand01(s.grumbleSeed ^ 0x5a5a, q));
+            c++;
+        }
+        return c;
+    }
+
+    private static double boomAt(Strike s, double[] buf, int off, int count, double x) {
+        double att = 0.006 + 0.04 * (1 - s.near);
+        double y = 0;
+        for (int j = 0; j < count; j++) {
+            int o = off + j * 4;
+            double u = x - buf[o];
+            if (u < 0) continue;
+            double tau = buf[o + 2];
+            if (u - att > tau * 6) continue;
+            double f = buf[o + 3];
+            double rise = u < att ? 0.5 - 0.5 * Math.cos((Math.PI * u) / att) : 1;
+            double env = buf[o + 1] * rise * Math.exp(-Math.max(0, u - att) / tau);
+            double ph = f * u + f * 0.5 * 0.06 * (1 - Math.exp(-u / 0.06));
+            y += env * Math.sin(Dsp.TWO_PI * ph);
+        }
+        return y;
     }
 
     static double crackEnvelope(Strike s, double t) {
@@ -283,6 +352,8 @@ public final class Thunder {
         final Strike[] strikes = new Strike[LOOKBACK];
         final Map<Double, StrikeState> states = new HashMap<>();
         final double[] envA = new double[LOOKBACK], envB = new double[LOOKBACK];
+        final double[] arrBuf = new double[LOOKBACK * MAX_ARR * 4];
+        final int[] arrN = new int[LOOKBACK];
         final double[] crA = new double[LOOKBACK], crB = new double[LOOKBACK];
         final double[] panL = new double[LOOKBACK], panR = new double[LOOKBACK];
 
@@ -341,6 +412,7 @@ public final class Thunder {
                     return;
                 }
                 double gain = 3.6 * (0.35 + 0.65 * intensity);
+                double boomGain = gain * 0.52 * 0.3;
                 for (int i0 = 0; i0 < n; i0 += SUB) {
                     int m = Math.min(n, i0 + SUB);
                     double ta = (start + i0) / sr;
@@ -349,9 +421,11 @@ public final class Thunder {
                         Strike s = strikes[k];
                         if (s == null || s.start > tb || strikeEnd(s) < ta) {
                             envA[k] = envB[k] = crA[k] = crB[k] = 0;
+                            arrN[k] = 0;
                             continue;
                         }
                         envA[k] = rumbleEnvelope(s, ta);
+                        arrN[k] = arrivalsAt(s, tb - s.start, arrBuf, k * MAX_ARR * 4);
                         envB[k] = rumbleEnvelope(s, tb);
                         crA[k] = crackEnvelope(s, ta);
                         crB[k] = crackEnvelope(s, tb);
@@ -375,13 +449,14 @@ public final class Thunder {
                             double e = envA[k] + (envB[k] - envA[k]) * f;
                             double c = crA[k] + (crB[k] - crA[k]) * f;
                             double th = thumpAt(s, t);
-                            if (e == 0 && c == 0 && th == 0) continue;
+                            double bm = arrN[k] > 0 ? boomAt(s, arrBuf, k * MAX_ARR * 4, arrN[k], t - s.start) * boomGain * (0.5 + 0.5 * s.near) * s.level : 0;
+                            if (e == 0 && c == 0 && th == 0 && bm == 0) continue;
                             StrikeState st = stateFor(s, sr);
                             double nl = st.l2.step(st.l1.step(bl));
                             double nr = st.r2.step(st.r1.step(br));
                             double a = 0.5 + 0.5 * s.width, b = 0.5 - 0.5 * s.width;
-                            double ml = (nl * a + nr * b) * e * gain + crackNoise * c + th * 0.5;
-                            double mr = (nr * a + nl * b) * e * gain + crackNoise * c + th * 0.5;
+                            double ml = (nl * a + nr * b) * e * gain + crackNoise * c + th * 0.5 + bm;
+                            double mr = (nr * a + nl * b) * e * gain + crackNoise * c + th * 0.5 + bm;
                             l += ml * panL[k];
                             r += mr * panR[k];
                         }
