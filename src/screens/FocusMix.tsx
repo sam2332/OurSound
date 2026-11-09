@@ -1,4 +1,4 @@
-import { CloudRain, Music } from 'lucide-react';
+import { CloudRain, Moon, Music } from 'lucide-react';
 import type { FocusMix, Soundtrack, Timeline } from '../engine/model.ts';
 import { TRACK_COLORS } from '../templates.ts';
 import { Segmented, Slider, cx } from '../ui/controls.tsx';
@@ -13,11 +13,33 @@ const ROOM = [
   { value: 14, label: 'Strong' },
 ];
 
+/** Sounds that suit the music's quiet moments: they come in only then. */
+const FILL = new Set(['crickets']);
+
 export function defaultFocus(tl: Timeline, leadId: string): FocusMix {
-  const follow = tl.soundtracks
-    .filter((t) => t.id !== leadId && t.segments.some((s) => AMBIENT.has(s.generator)))
+  const others = tl.soundtracks.filter((t) => t.id !== leadId);
+  const fill = others.filter((t) => t.segments.some((s) => FILL.has(s.generator))).map((t) => t.id);
+  const follow = others
+    .filter((t) => !fill.includes(t.id) && t.segments.some((s) => AMBIENT.has(s.generator)))
     .map((t) => t.id);
-  return { lead: leadId, follow, levelDb: -6, duckDb: 8 };
+  return { lead: leadId, follow, fill, levelDb: -6, duckDb: 8 };
+}
+
+function Chip({ on, color, name, onClick }: { on: boolean; color: string; name: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className={cx(
+        'flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs',
+        on ? 'border-transparent bg-bg/60 font-semibold' : 'border-line text-muted',
+      )}
+    >
+      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: on ? color : 'transparent', boxShadow: `inset 0 0 0 1px ${color}` }} />
+      <span className="truncate">{name}</span>
+    </button>
+  );
 }
 
 /**
@@ -37,6 +59,7 @@ export function FocusMixPanel({
 }) {
   const f = timeline.focus?.lead === lead.id ? timeline.focus : undefined;
   const others = timeline.soundtracks.filter((t) => t.id !== lead.id);
+  const colorOf = (t: Soundtrack) => t.color ?? TRACK_COLORS[timeline.soundtracks.indexOf(t) % TRACK_COLORS.length];
   const setFocus = (recipe: (f: FocusMix) => void) =>
     edit((d) => {
       if (d.focus?.lead === lead.id) recipe(d.focus);
@@ -85,29 +108,54 @@ export function FocusMixPanel({
         </span>
         <div className="flex flex-wrap gap-1.5">
           {others.map((t) => {
-            const on = f.follow.includes(t.id);
-            const c = t.color ?? TRACK_COLORS[timeline.soundtracks.indexOf(t) % TRACK_COLORS.length];
+            const on = f.follow.includes(t.id) && !f.fill?.includes(t.id);
             return (
-              <button
+              <Chip
                 key={t.id}
-                type="button"
-                aria-pressed={on}
+                on={on}
+                color={colorOf(t)}
+                name={t.name}
                 onClick={() =>
                   setFocus((x) => {
                     x.follow = on ? x.follow.filter((id) => id !== t.id) : [...x.follow, t.id];
+                    if (!on && x.fill) x.fill = x.fill.filter((id) => id !== t.id);
                   })
                 }
-                className={cx(
-                  'flex max-w-full items-center gap-1.5 rounded-full border px-3 py-1 text-xs',
-                  on ? 'border-transparent bg-bg/60 font-semibold' : 'border-line text-muted',
-                )}
-              >
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: on ? c : 'transparent', boxShadow: `inset 0 0 0 1px ${c}` }} />
-                <span className="truncate">{t.name}</span>
-              </button>
+              />
             );
           })}
         </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <span className="flex items-center gap-1.5 text-xs text-muted">
+          <Moon size={14} /> Only in the quiet parts
+        </span>
+        <div className="flex flex-wrap gap-1.5">
+          {others.map((t) => {
+            const on = !!f.fill?.includes(t.id);
+            return (
+              <Chip
+                key={t.id}
+                on={on}
+                color={colorOf(t)}
+                name={t.name}
+                onClick={() =>
+                  setFocus((x) => {
+                    const fill = x.fill ?? [];
+                    x.fill = on ? fill.filter((id) => id !== t.id) : [...fill, t.id];
+                    if (!on) x.follow = x.follow.filter((id) => id !== t.id);
+                  })
+                }
+              />
+            );
+          })}
+        </div>
+        <span className="text-xs text-muted">
+          {f.fill?.length
+            ? 'These stay silent while the music plays and drift in when it goes soft or between songs.'
+            : 'Pick sounds like crickets to come in only when the music goes soft or between songs.'}
+        </span>
       </div>
 
       <Slider

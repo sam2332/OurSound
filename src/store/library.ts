@@ -70,7 +70,12 @@ function withNewIds(tl: Timeline, name?: string): Timeline {
   const now = Date.now();
   const ids = new Map(tl.soundtracks.map((t) => [t.id, newId()]));
   const focus = tl.focus && ids.has(tl.focus.lead)
-    ? { ...tl.focus, lead: ids.get(tl.focus.lead)!, follow: tl.focus.follow.filter((f) => ids.has(f)).map((f) => ids.get(f)!) }
+    ? {
+        ...tl.focus,
+        lead: ids.get(tl.focus.lead)!,
+        follow: tl.focus.follow.filter((f) => ids.has(f)).map((f) => ids.get(f)!),
+        fill: tl.focus.fill?.filter((f) => ids.has(f)).map((f) => ids.get(f)!),
+      }
     : undefined;
   return {
     ...structuredClone(tl),

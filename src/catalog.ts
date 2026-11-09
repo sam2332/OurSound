@@ -44,6 +44,7 @@ const ALL: CatalogGroup[] = [
       { key: 'wind', label: 'Wind', description: 'Gusting wind', generator: 'wind' },
       { key: 'ocean', label: 'Ocean waves', description: 'Waves rolling in and out', generator: 'ocean' },
       { key: 'campfire', label: 'Campfire', description: 'Crackling fire with pops and a soft roar', generator: 'campfire' },
+      { key: 'crickets', label: 'Crickets', description: 'A summer-night chorus; can come in only when the music goes quiet', generator: 'crickets' },
       { key: 'drums', label: 'Drums', description: 'Slow hand drums: heartbeat, steady, shamanic or tribal', generator: 'drums' },
     ],
   },

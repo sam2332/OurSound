@@ -100,6 +100,7 @@ function slim(tl: Timeline, library: FileInfo[]): unknown {
                 ...tl.focus,
                 lead: tid.get(tl.focus.lead),
                 follow: tl.focus.follow.filter((f) => tid.has(f)).map((f) => tid.get(f)),
+                fill: tl.focus.fill?.filter((f) => tid.has(f)).map((f) => tid.get(f)),
               }
             : undefined,
         missingFiles: files.length ? files.map((f) => strip({ ...f, id: fid.get(f.id) }, { ext: undefined, size: undefined })) : undefined,

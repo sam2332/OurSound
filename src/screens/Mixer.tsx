@@ -364,9 +364,15 @@ function TrackCard({
       const t = d.soundtracks.find((x) => x.id === track.id);
       if (t) recipe(t);
     });
-  const leadName =
-    timeline.focus?.follow.includes(track.id) && timeline.soundtracks.find((x) => x.id === timeline.focus?.lead)?.name;
-  const summary = [track.segments.map(segmentSummary).join(' · '), leadName ? `under ${leadName}` : ''].filter(Boolean).join(' · ');
+  const focusLead = timeline.soundtracks.find((x) => x.id === timeline.focus?.lead)?.name;
+  const fills = !!focusLead && !!timeline.focus?.fill?.includes(track.id);
+  const under = !!focusLead && !fills && !!timeline.focus?.follow.includes(track.id);
+  const summary = [
+    track.segments.map(segmentSummary).join(' · '),
+    fills ? `in the quiet parts of ${focusLead}` : under ? `under ${focusLead}` : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
   const hasTrackAuto = track.automation.some((l) => l.points.length > 0);
 
   return (
@@ -528,7 +534,10 @@ function TrackCard({
         onConfirm={() =>
           edit((d) => {
             d.soundtracks = d.soundtracks.filter((x) => x.id !== track.id);
-            if (d.focus) d.focus.follow = d.focus.follow.filter((id) => id !== track.id);
+            if (d.focus) {
+              d.focus.follow = d.focus.follow.filter((id) => id !== track.id);
+              if (d.focus.fill) d.focus.fill = d.focus.fill.filter((id) => id !== track.id);
+            }
           })
         }
         onClose={() => setConfirmDelete(false)}

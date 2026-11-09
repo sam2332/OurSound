@@ -553,6 +553,30 @@ export const TEMPLATES: Template[] = [
       ]),
   },
   {
+    id: 'summer-night',
+    name: 'Summer Night',
+    category: 'Ambience',
+    description: '8 h · crickets in the warm dark; as the night cools they chirp slower and drop out one by one',
+    shows: 'Automating how many crickets sing and how fast, the way real crickets slow down as it gets cooler',
+    build: () =>
+      timeline('Summer Night', H8, [
+        track('Crickets', 5, [
+          seg('crickets', H8, {
+            params: { crickets: 8, rate: 2.4, pitch: 0.45, rests: 0.3 },
+            gainDb: -20,
+            fadeIn: 30,
+            auto: {
+              rate: [{ t: 0, v: 2.4, curve: 'smooth' }, { t: 3 * HOUR, v: 1.4, curve: 'smooth' }, { t: H8, v: 1 }],
+              crickets: [{ t: 0, v: 8, curve: 'smooth' }, { t: 4 * HOUR, v: 4, curve: 'smooth' }, { t: H8, v: 2 }],
+              rests: [{ t: 0, v: 0.3, curve: 'smooth' }, { t: H8, v: 0.6 }],
+            },
+          }),
+        ]),
+        track('Night breeze', 6, [seg('wind', H8, { params: { strength: 0.15, gusts: 0.25, pitch: 0.2 }, gainDb: -26, fadeIn: 60 })], { pan: 0.15 }),
+        track('Theta binaural', 0, [seg('binaural', H8, { params: { carrier: 160, beat: 5 }, gainDb: -24, fadeIn: 60 })]),
+      ]),
+  },
+  {
     id: 'heartbeat-drum',
     name: 'Heartbeat Drum',
     category: 'Sleep',
