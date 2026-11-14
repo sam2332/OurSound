@@ -110,7 +110,7 @@ function timeline(name: string, duration: number, soundtracks: Soundtrack[], end
 
 // ------------------------------------------------------------------ the samples
 
-export type TemplateCategory = 'Sleep' | 'Brainwaves' | 'Noise' | 'Naps & focus' | 'Ambience';
+export type TemplateCategory = 'Sleep' | 'Quiet room' | 'Brainwaves' | 'Noise' | 'Naps & focus' | 'Ambience';
 
 export type Template = {
   id: string;
@@ -295,6 +295,129 @@ export const TEMPLATES: Template[] = [
       ),
   },
 
+  // ---------------------------------------------------------------- quiet room
+  // Soft, steady beds that cover the little noises of a room (a fridge, a
+  // neighbour, a car going by) without being something you listen to. No tones.
+  {
+    id: 'quiet-bedroom',
+    name: 'Quiet Bedroom',
+    category: 'Quiet room',
+    description: '8 h · a barely-there hush, like a still room with the heating on low',
+    shows: 'How little it takes: dark pink noise and a very slow fan, both far down',
+    build: () =>
+      timeline('Quiet Bedroom', H8, [
+        track('Room hush', 1, [seg('noise', H8, { params: { color: 1, width: 0.8, tone: -0.6 }, gainDb: -15, fadeIn: 30 })]),
+        track('Air', 3, [seg('fan', H8, { params: { speed: 0.12, tone: 0.15, wobble: 0.15 }, gainDb: -21, fadeIn: 60 })]),
+      ]),
+  },
+  {
+    id: 'air-conditioner',
+    name: 'Air Conditioner',
+    category: 'Quiet room',
+    description: '8 h · the steady whoosh of a window unit with a low hum under it',
+    shows: 'A fan turned into an air conditioner: little wobble, darker tone, brown noise for the hum',
+    build: () =>
+      timeline('Air Conditioner', H8, [
+        track('Airflow', 3, [seg('fan', H8, { params: { speed: 0.4, tone: 0.25, wobble: 0.08 }, gainDb: -14, fadeIn: 15 })]),
+        track('Hum', 2, [seg('noise', H8, { params: { color: 2, width: 0.6, tone: -0.4 }, gainDb: -19, fadeIn: 15 })]),
+      ]),
+  },
+  {
+    id: 'airplane-cabin',
+    name: 'Airplane Cabin',
+    category: 'Quiet room',
+    description: '8 h · the deep, even engine drone of a long night flight',
+    shows: 'Stacking three steady layers into one big, smooth wall of sound',
+    build: () =>
+      timeline('Airplane Cabin', H8, [
+        track('Engines', 2, [seg('noise', H8, { params: { color: 2, width: 1, tone: -0.2 }, gainDb: -11, fadeIn: 30 })]),
+        track('Cabin air', 1, [seg('noise', H8, { params: { color: 1, width: 1, tone: -0.4 }, gainDb: -19, fadeIn: 30 })]),
+        track('Vents', 3, [seg('fan', H8, { params: { speed: 0.8, tone: 0.1, wobble: 0.05 }, gainDb: -23, fadeIn: 30 })]),
+      ]),
+  },
+  {
+    id: 'distant-traffic',
+    name: 'Distant Traffic',
+    category: 'Quiet room',
+    description: '8 h · a far-off road at night: a low rumble and a car swishing past now and then',
+    shows: 'A short noise segment on random repeat makes the cars; each pass fades in and out',
+    build: () =>
+      timeline('Distant Traffic', H8, [
+        track('Far road', 2, [seg('noise', H8, { params: { color: 2, width: 0.9, tone: -0.7 }, gainDb: -16, fadeIn: 30 })]),
+        track('Passing cars', 1, [
+          seg('noise', H8, {
+            length: 30,
+            params: { color: 2, width: 1, tone: -0.45 },
+            gainDb: -18,
+            fadeIn: 12,
+            fadeOut: 16,
+            repeat: { mode: 'random', minGap: 15, maxGap: 120 },
+          }),
+        ]),
+      ]),
+  },
+  {
+    id: 'rain-on-roof',
+    name: 'Rain on the Roof',
+    category: 'Quiet room',
+    description: '8 h · soft rain heard from inside, muffled by the ceiling',
+    shows: 'Rain turned dark and gentle (low brightness) so it covers rather than patters',
+    build: () =>
+      timeline('Rain on the Roof', H8, [
+        track('Rain above', 1, [seg('rain', H8, { params: { intensity: 0.3, sheets: 0.35, brightness: 0.12 }, gainDb: -13, fadeIn: 30 })]),
+        track('Room', 2, [seg('noise', H8, { params: { color: 2, width: 0.7, tone: -0.5 }, gainDb: -20, fadeIn: 30 })]),
+      ]),
+  },
+  {
+    id: 'snowy-night',
+    name: 'Snowy Night',
+    category: 'Quiet room',
+    description: '8 h · the hush of snow: a faint low wind and deep stillness',
+    shows: 'Wind at its softest and lowest, over very dark brown noise',
+    build: () =>
+      timeline('Snowy Night', H8, [
+        track('Snow wind', 6, [seg('wind', H8, { params: { strength: 0.18, gusts: 0.25, pitch: 0.2 }, gainDb: -11, fadeIn: 60 })]),
+        track('Stillness', 2, [seg('noise', H8, { params: { color: 2, width: 0.8, tone: -0.8 }, gainDb: -15, fadeIn: 60 })]),
+      ]),
+  },
+  {
+    id: 'ocean-window',
+    name: 'Ocean Through the Window',
+    category: 'Quiet room',
+    description: '8 h · slow, far-away waves with the window cracked open',
+    shows: 'Ocean with closeness turned right down, so the waves become a slow breathing',
+    build: () =>
+      timeline('Ocean Through the Window', H8, [
+        track('Far waves', 6, [seg('ocean', H8, { params: { period: 13, size: 0.45, closeness: 0.1 }, gainDb: -9, fadeIn: 60 })]),
+        track('Room', 1, [seg('noise', H8, { params: { color: 1, width: 0.7, tone: -0.7 }, gainDb: -20, fadeIn: 60 })]),
+      ]),
+  },
+  {
+    id: 'embers-next-door',
+    name: 'Embers Next Door',
+    category: 'Quiet room',
+    description: '8 h · a small fire burning low in the next room',
+    shows: 'Campfire made small and quiet, with almost no pops, over a warm rumble',
+    build: () =>
+      timeline('Embers Next Door', H8, [
+        track('Embers', 4, [seg('campfire', H8, { params: { size: 0.2, crackle: 0.15, pops: 0.05 }, gainDb: -14, fadeIn: 60 })]),
+        track('Warm room', 2, [seg('noise', H8, { params: { color: 2, width: 0.7, tone: -0.6 }, gainDb: -14, fadeIn: 60 })]),
+      ]),
+  },
+  {
+    id: 'fading-hush',
+    name: 'Fading Hush',
+    category: 'Quiet room',
+    description: '8 h · covers the room while you fall asleep, then softens slowly through the night',
+    shows: 'A gain curve on each layer: full for the first hour, about 10 dB down by morning',
+    build: () => {
+      const fade = { gain: pts([0, 0], [HOUR, 0], [6 * HOUR, -10], [H8, -10]) };
+      return timeline('Fading Hush', H8, [
+        track('Pink hush', 1, [seg('noise', H8, { params: { color: 1, width: 1, tone: -0.5 }, gainDb: -15, fadeIn: 20, auto: fade })]),
+        track('Brown floor', 2, [seg('noise', H8, { params: { color: 2, width: 0.8, tone: -0.6 }, gainDb: -19, fadeIn: 20, auto: fade })]),
+      ]);
+    },
+  },
   // ---------------------------------------------------------------- brainwaves
   {
     id: 'delta-waves',
@@ -661,6 +784,95 @@ export const TEMPLATES: Template[] = [
     },
   },
   {
+    id: 'brook',
+    name: 'Babbling Brook',
+    category: 'Ambience',
+    description: '8 h · a little stream over stones, with a soft breeze in the trees',
+    shows: 'The stream sound: try more flow for a river, less for a trickle',
+    build: () =>
+      timeline('Babbling Brook', H8, [
+        track('Stream', 6, [seg('stream', H8, { params: { flow: 0.55, pitch: 0.45, closeness: 0.55 }, gainDb: -12, fadeIn: 30 })]),
+        track('Breeze', 3, [seg('wind', H8, { params: { strength: 0.2, gusts: 0.35, pitch: 0.45 }, gainDb: -22, fadeIn: 60 })]),
+      ]),
+  },
+  {
+    id: 'cat-on-bed',
+    name: 'Cat on the Bed',
+    category: 'Quiet room',
+    description: '8 h · a cat purring by your feet in a quiet room; it slows as it falls asleep',
+    shows: 'The purring cat, with its breathing slowing over the first hour',
+    build: () =>
+      timeline('Cat on the Bed', H8, [
+        track('Purr', 1, [
+          seg('purr', H8, {
+            params: { breaths: 22, pitch: 0.4, rumble: 0.45 },
+            gainDb: -14,
+            fadeIn: 30,
+            auto: { breaths: pts([0, 22], [HOUR, 15], [H8, 15]) },
+          }),
+        ]),
+        track('Room hush', 2, [seg('noise', H8, { params: { color: 1, width: 0.8, tone: -0.6 }, gainDb: -22, fadeIn: 30 })]),
+      ]),
+  },
+  {
+    id: 'ambient-drift',
+    name: 'Ambient Drift',
+    category: 'Sleep',
+    description: '8 h · slow dreamy chords over soft rain, settling quieter through the night',
+    shows: 'The ambient pad: music generated live, with a volume curve that lowers it after the first hour',
+    build: () =>
+      timeline('Ambient Drift', H8, [
+        track('Pad', 5, [
+          seg('pad', H8, {
+            params: { mood: 1, pitch: 0, change: 60, brightness: 0.3, movement: 0.5 },
+            gainDb: -14,
+            fadeIn: 60,
+            auto: { gain: pts([0, 0], [HOUR, 0], [3 * HOUR, -8], [H8, -8]) },
+          }),
+        ]),
+        track('Soft rain', 1, [seg('rain', H8, { params: { intensity: 0.3, sheets: 0.4, brightness: 0.2 }, gainDb: -20, fadeIn: 60 })]),
+      ]),
+  },
+  {
+    id: 'bowl-meditation',
+    name: 'Singing Bowls',
+    category: 'Naps & focus',
+    description: '30 min · bowls struck now and then over a deep drone and a slow theta beat',
+    shows: 'The singing bowl with variety picking between three bowls, under an ambient pad',
+    build: () =>
+      timeline('Singing Bowls', 30 * MIN, [
+        track('Bowls', 4, [seg('bowl', 30 * MIN, { params: { rate: 1.5, pitch: 0.3, ring: 0.7, variety: 0.6 }, gainDb: -12, fadeIn: 1, fadeOut: 60 })]),
+        track('Drone', 5, [seg('pad', 30 * MIN, { params: { mood: 0, pitch: 0, change: 90, brightness: 0.2, movement: 0.3 }, gainDb: -22, fadeIn: 60, fadeOut: 90 })]),
+        track('Theta 6 Hz', 0, [seg('binaural', 30 * MIN, { params: { carrier: 180, beat: 6 }, gainDb: -24, fadeIn: 60, fadeOut: 90 })]),
+      ]),
+  },
+  {
+    id: 'drum-circle',
+    name: 'Drum Circle',
+    category: 'Ambience',
+    description: '2 h · an easy groove of hand drums and a shaker by the fire, slowing down over time',
+    shows: 'A pattern drawn on the drum pad ("My pattern"), with a tempo curve',
+    build: () => {
+      const d = seg('drums', 2 * HOUR, {
+        params: { tempo: 84, style: 4, depth: 0.35, variety: 0.45 },
+        gainDb: -14,
+        fadeIn: 20,
+        auto: { tempo: pts([0, 84], [2 * HOUR, 64]) },
+      });
+      d.drumPattern = [
+        [1, 0, 0, 0, 0, 0, 0.5, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0.5, 0, 1, 0, 0, 0],
+        [0, 0, 0, 0.5, 0, 0, 0, 0, 0, 0, 0, 0.5, 0, 0, 1, 0],
+        [0.5, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0.5, 0, 0.5, 0],
+        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      ];
+      return timeline('Drum Circle', 2 * HOUR, [
+        track('Hand drums', 2, [d]),
+        track('Fire', 4, [seg('campfire', 2 * HOUR, { params: { size: 0.5, crackle: 0.5, pops: 0.3 }, gainDb: -18, fadeIn: 20 })]),
+      ]);
+    },
+  },
+  {
     id: 'endless',
     name: 'Endless Pink Noise',
     category: 'Noise',
@@ -671,4 +883,4 @@ export const TEMPLATES: Template[] = [
   },
 ];
 
-export const TEMPLATE_CATEGORIES: TemplateCategory[] = ['Sleep', 'Brainwaves', 'Noise', 'Naps & focus', 'Ambience'];
+export const TEMPLATE_CATEGORIES: TemplateCategory[] = ['Sleep', 'Quiet room', 'Brainwaves', 'Noise', 'Naps & focus', 'Ambience'];

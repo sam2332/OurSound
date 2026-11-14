@@ -12,6 +12,8 @@ export interface PlaybackPlugin {
   setPaused(options?: { text?: string }): Promise<void>;
   isIgnoringBatteryOptimizations(): Promise<{ value: boolean }>;
   requestIgnoreBatteryOptimizations(): Promise<void>;
+  /** Posts a feedback report (Discord webhook payload_json plus an optional attached file). */
+  postFeedback(options: { url: string; payload: string; fileName?: string; fileText?: string }): Promise<void>;
   /** 'becomingNoisy' fires when headphones disconnect (audio would move to the speaker). */
   addListener(event: 'becomingNoisy', fn: () => void): Promise<PluginListenerHandle>;
   /** Lock screen, notification or headphone-button command. */
@@ -31,6 +33,8 @@ export const Playback: PlaybackPlugin = {
     isNative ? native.isIgnoringBatteryOptimizations() : Promise.resolve({ value: true }),
   requestIgnoreBatteryOptimizations: () =>
     isNative ? native.requestIgnoreBatteryOptimizations() : Promise.resolve(),
+  postFeedback: (o) =>
+    isNative ? native.postFeedback(o) : Promise.reject(new Error('Feedback can only be sent from the phone app.')),
   addListener: ((event: 'becomingNoisy' | 'remote', fn: (e: never) => void) =>
     isNative
       ? native.addListener(event as 'remote', fn as (e: { action: 'play' | 'pause' }) => void)

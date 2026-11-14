@@ -151,3 +151,42 @@ export class Tilt {
     this.hi.reset();
   }
 }
+
+/**
+ * Adds a decaying sine to L/R over samples [from, to) of a block that starts
+ * at sample `start`, by recurrence (no sin per sample). `phase` is the phase
+ * (radians) at sample `from`, `w` the step per sample, `amp` the amplitude
+ * at `from`, multiplied by `decay` every sample. Java: Dsp.addOsc (same order of operations).
+ */
+export function addOsc(
+  L: Float32Array,
+  R: Float32Array,
+  start: number,
+  from: number,
+  to: number,
+  phase: number,
+  w: number,
+  amp: number,
+  decay: number,
+  gl: number,
+  gr: number,
+): void {
+  const c2 = 2 * Math.cos(w);
+  let y1 = Math.sin(phase - w);
+  let y0 = Math.sin(phase);
+  let e = amp;
+  for (let j = from; j < to; j++) {
+    const x = y0 * e;
+    L[j - start] += x * gl;
+    R[j - start] += x * gr;
+    const y2 = c2 * y0 - y1;
+    y1 = y0;
+    y0 = y2;
+    e *= decay;
+  }
+}
+
+/** Fractional part, so long-running phases stay precise. */
+export function frac(x: number): number {
+  return x - Math.floor(x);
+}

@@ -143,4 +143,27 @@ public final class Dsp {
             }
         };
     }
+
+    /** Port of addOsc in dsp.ts: a decaying sine by recurrence, added to L/R over [from, to). */
+    public static void addOsc(float[] L, float[] R, double start, double from, double to, double phase, double w,
+            double amp, double decay, double gl, double gr) {
+        double c2 = 2 * Math.cos(w);
+        double y1 = Math.sin(phase - w);
+        double y0 = Math.sin(phase);
+        double e = amp;
+        for (double j = from; j < to; j++) {
+            double x = y0 * e;
+            int o = (int) (j - start);
+            L[o] = (float) (L[o] + x * gl);
+            R[o] = (float) (R[o] + x * gr);
+            double y2 = c2 * y0 - y1;
+            y1 = y0;
+            y0 = y2;
+            e *= decay;
+        }
+    }
+
+    public static double frac(double x) {
+        return x - Math.floor(x);
+    }
 }

@@ -4,7 +4,7 @@ import { TRACK_COLORS } from '../templates.ts';
 import { Segmented, Slider, cx } from '../ui/controls.tsx';
 
 /** Sounds that make a good bed under music. Brainwave tones keep their level by default. */
-const AMBIENT = new Set(['noise', 'fan', 'rain', 'thunder', 'wind', 'ocean', 'campfire']);
+const AMBIENT = new Set(['noise', 'fan', 'rain', 'thunder', 'wind', 'ocean', 'campfire', 'stream', 'purr']);
 
 const ROOM = [
   { value: 0, label: 'Off' },

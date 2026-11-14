@@ -2,6 +2,7 @@
 
 import { X } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 
 export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(' ');
@@ -299,7 +300,8 @@ export function Sheet({
   children: ReactNode;
 }) {
   if (!open) return null;
-  return (
+  // Rendered at the top of the page so a dimmed (Off) card can't make it see-through.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60" onClick={onClose}>
       <div
         className="pb-safe max-h-[85vh] overflow-y-auto rounded-t-3xl border-t border-line bg-card px-4 pt-3"
@@ -316,7 +318,8 @@ export function Sheet({
         </div>
         <div className="flex flex-col gap-3 pb-2">{children}</div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

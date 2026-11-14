@@ -1,6 +1,6 @@
-import { ArrowDown, ArrowUp, AudioLines, ChevronDown, ChevronUp, Copy, Disc3, LineChart, Loader2, Plus, Repeat, Trash2, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, AudioLines, ChevronDown, ChevronUp, Copy, Disc3, LineChart, Loader2, Pause, Plus, Repeat, Trash2, X } from 'lucide-react';
 import { useRef, useState } from 'react';
-import { albumLoops, albumSegments, albumSpan, isAlbum, repackAlbum, trackAt } from '../album.ts';
+import { albumCycle, albumLoops, albumSegments, albumSpan, gapAfter, isAlbum, repackAlbum, trackAt } from '../album.ts';
 import { importAudioFile, importAudioNativeMany, usesNativeAssets, type StoredAsset } from '../audio/assets.ts';
 import { useAssets } from '../audio/useAssets.ts';
 import type { Segment, Soundtrack, Timeline } from '../engine/model.ts';
@@ -8,9 +8,18 @@ import { newId, newSeed, useLibrary } from '../store/library.ts';
 import { usePlayback } from '../store/playback.ts';
 import { TRACK_COLORS } from '../templates.ts';
 import { FocusMixPanel } from './FocusMix.tsx';
-import { Button, Confirm, IconButton, Slider, TimeInput, cx, fmtDuration } from '../ui/controls.tsx';
+import { Button, Confirm, IconButton, Segmented, Slider, TimeInput, cx, fmtDuration } from '../ui/controls.tsx';
 
 export { isAlbum };
+
+/** "Off", "2 min", "1 min 30 s" */
+function fmtPause(sec: number): string {
+  if (sec <= 0) return 'Off';
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  if (m === 0) return `${s} s`;
+  return s ? `${m} min ${s} s` : `${m} min`;
+}
 
 /** 3:41 or 1:02:03 */
 function fmtTrack(sec: number): string {
@@ -83,7 +92,7 @@ export function AlbumCard({
     const cut = trackAt({ ...track, segments: segs.map((s) => ({ ...s, repeat: { mode: 'none' as const } })) }, timeline.duration - 0.001);
     story = `The timeline ends during track ${cut + 1}.`;
   } else if (loops) {
-    const times = room / span.length;
+    const times = room / albumCycle(track);
     story = times >= 1.95 ? `Plays about ${Math.floor(times + 0.05)}× to fill the ${fmtDuration(timeline.duration)} timeline.` : 'Starts over after the last track.';
   } else {
     const after = room - span.length;
@@ -123,6 +132,15 @@ export function AlbumCard({
     } finally {
       setAdding(false);
     }
+  };
+
+  const removeTrack = (segId: string) => {
+    if (openTrack === segId) setOpenTrack(null);
+    editAlbum((t) => {
+      const start = Math.min(...t.segments.map((s) => s.start));
+      t.segments = t.segments.filter((x) => x.id !== segId);
+      if (t.segments[0]) t.segments[0].start = start;
+    });
   };
 
   const move = (i: number, d: number) =>
@@ -215,6 +233,25 @@ export function AlbumCard({
         <p className="px-1 text-xs text-muted">{story}</p>
       </div>
 
+      {/* silence after every track, so the background has the room to itself for a while */}
+      <div className="flex flex-col gap-1">
+        <Slider
+          label="Pause after each track"
+          value={track.albumGap ?? 0}
+          min={0}
+          max={20 * 60}
+          step={30}
+          color={color}
+          format={fmtPause}
+          onChange={(v) => editAlbum((t) => void (t.albumGap = v))}
+        />
+        <p className="px-1 text-xs text-muted">
+          {(track.albumGap ?? 0) > 0
+            ? 'The music stops for a while between tracks and the background plays on its own. Tap a track to change its pause.'
+            : 'Leave a few minutes of just the background between tracks. Tap a track to give it its own pause.'}
+        </p>
+      </div>
+
       <FocusMixPanel timeline={timeline} lead={track} color={color} edit={edit} />
 
       {/* track list */}
@@ -224,23 +261,34 @@ export function AlbumCard({
           const open = openTrack === seg.id;
           return (
             <li key={seg.id} className={cx('border-line', i > 0 && 'border-t')}>
-              <button
-                type="button"
-                onClick={() => setOpenTrack(open ? null : seg.id)}
-                className="flex w-full items-center gap-3 px-3 py-2.5 text-left active:bg-bg/30"
-                aria-expanded={open}
-              >
-                <span className="w-6 shrink-0 text-center text-sm tabular-nums" style={now ? { color } : undefined}>
-                  {now ? <AudioLines size={16} className="mx-auto animate-pulse" /> : <span className="text-muted">{i + 1}</span>}
-                </span>
-                <span className={cx('min-w-0 flex-1 truncate', now && 'font-semibold')} style={now ? { color } : undefined}>
-                  {nameOf(seg, i)}
-                </span>
-                {seg.gainDb !== (first?.gainDb ?? seg.gainDb) && (
-                  <span className="shrink-0 rounded-full bg-bg/40 px-1.5 text-[10px] text-muted">{seg.gainDb > (first?.gainDb ?? 0) ? 'louder' : 'quieter'}</span>
+              <div className="flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setOpenTrack(open ? null : seg.id)}
+                  className={cx('flex min-w-0 flex-1 items-center gap-3 py-2.5 pl-3 text-left active:bg-bg/30', segs.length <= 1 && 'pr-3')}
+                  aria-expanded={open}
+                >
+                  <span className="w-6 shrink-0 text-center text-sm tabular-nums" style={now ? { color } : undefined}>
+                    {now ? <AudioLines size={16} className="mx-auto animate-pulse" /> : <span className="text-muted">{i + 1}</span>}
+                  </span>
+                  <span className={cx('min-w-0 flex-1 truncate', now && 'font-semibold')} style={now ? { color } : undefined}>
+                    {nameOf(seg, i)}
+                  </span>
+                  {seg.gainDb !== (first?.gainDb ?? seg.gainDb) && (
+                    <span className="shrink-0 rounded-full bg-bg/40 px-1.5 text-[10px] text-muted">{seg.gainDb > (first?.gainDb ?? 0) ? 'louder' : 'quieter'}</span>
+                  )}
+                  <span className="shrink-0 text-sm text-muted tabular-nums">{fmtTrack(seg.length)}</span>
+                </button>
+                {segs.length > 1 && (
+                  <IconButton
+                    label={`Remove ${nameOf(seg, i)} from the album`}
+                    onClick={() => removeTrack(seg.id)}
+                    className="h-10 w-10 bg-transparent text-muted"
+                  >
+                    <X size={16} />
+                  </IconButton>
                 )}
-                <span className="shrink-0 text-sm text-muted tabular-nums">{fmtTrack(seg.length)}</span>
-              </button>
+              </div>
               {open && (
                 <div className="flex flex-col gap-3 bg-bg/30 px-3 pt-2 pb-3">
                   <Slider
@@ -264,6 +312,36 @@ export function AlbumCard({
                       })
                     }
                   />
+                  <div className="flex flex-col gap-2">
+                    <div className="flex flex-col gap-1 text-sm">
+                      <span className="text-muted">Pause after this track</span>
+                      <Segmented
+                        value={seg.gapAfter === undefined ? 'album' : 'own'}
+                        onChange={(v) =>
+                          editAlbum((t) => {
+                            const s = t.segments.find((x) => x.id === seg.id)!;
+                            s.gapAfter = v === 'album' ? undefined : (t.albumGap ?? 0);
+                          })
+                        }
+                        options={[
+                          { value: 'album', label: `Album (${fmtPause(track.albumGap ?? 0)})` },
+                          { value: 'own', label: 'Its own' },
+                        ]}
+                      />
+                    </div>
+                    {seg.gapAfter !== undefined && (
+                      <Slider
+                        label="This track's pause"
+                        value={seg.gapAfter}
+                        min={0}
+                        max={20 * 60}
+                        step={30}
+                        color={color}
+                        format={fmtPause}
+                        onChange={(v) => editAlbum((t) => void (t.segments.find((x) => x.id === seg.id)!.gapAfter = v))}
+                      />
+                    )}
+                  </div>
                   <div className="flex items-center gap-2">
                     <IconButton label="Move track up" onClick={() => move(i, -1)} disabled={i === 0} className="h-9 w-9">
                       <ArrowUp size={16} />
@@ -278,28 +356,29 @@ export function AlbumCard({
                     >
                       <LineChart size={12} /> Show in timeline
                     </button>
-                    <span className="flex-1" />
-                    <IconButton
-                      label="Remove track from album"
-                      disabled={segs.length <= 1}
-                      onClick={() => {
-                        setOpenTrack(null);
-                        editAlbum((t) => {
-                          const start = Math.min(...t.segments.map((s) => s.start));
-                          t.segments = t.segments.filter((x) => x.id !== seg.id);
-                          if (t.segments[0]) t.segments[0].start = start;
-                        });
-                      }}
-                      className="h-9 w-9 bg-transparent text-danger"
-                    >
-                      <X size={16} />
-                    </IconButton>
                   </div>
+                </div>
+              )}
+              {gapAfter(track, seg) > 0 && (i < segs.length - 1 || loops) && (
+                <div className="flex items-center gap-2 border-t border-dashed border-line px-3 py-1 text-xs text-muted">
+                  <Pause size={12} className="ml-1.5" />
+                  {fmtPause(gapAfter(track, seg))} pause{seg.gapAfter !== undefined && ' (this track)'}
                 </div>
               )}
             </li>
           );
         })}
+        <li className="border-t border-line">
+          <button
+            type="button"
+            onClick={() => void pickTracks()}
+            disabled={adding}
+            className="flex w-full items-center justify-center gap-2 py-2.5 text-sm font-medium disabled:opacity-50"
+            style={{ color }}
+          >
+            {adding ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Add songs
+          </button>
+        </li>
         {segs.length > visible.length || (showAll && segs.length > 6) ? (
           <li className="border-t border-line">
             <button type="button" onClick={() => setShowAll(!showAll)} className="w-full py-2 text-sm text-muted">
@@ -308,6 +387,32 @@ export function AlbumCard({
           </li>
         ) : null}
       </ol>
+
+      <input
+        ref={fileInput}
+        type="file"
+        multiple
+        accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac"
+        className="hidden"
+        onChange={async (e) => {
+          const files = [...(e.target.files ?? [])];
+          e.target.value = '';
+          if (!files.length) return;
+          setAdding(true);
+          setAddError(null);
+          const got: StoredAsset[] = [];
+          for (const f of files) {
+            try {
+              got.push(await importAudioFile(f));
+            } catch (err) {
+              setAddError(`${f.name}: ${err instanceof Error ? err.message : String(err)}`);
+            }
+          }
+          setAdding(false);
+          if (got.length) addTracks(got);
+        }}
+      />
+      {addError && <p className="whitespace-pre-line text-sm text-danger">{addError}</p>}
 
       <button
         type="button"
@@ -390,31 +495,6 @@ export function AlbumCard({
             </>
           )}
 
-          <input
-            ref={fileInput}
-            type="file"
-            multiple
-            accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.opus,.flac"
-            className="hidden"
-            onChange={async (e) => {
-              const files = [...(e.target.files ?? [])];
-              e.target.value = '';
-              if (!files.length) return;
-              setAdding(true);
-              setAddError(null);
-              const got: StoredAsset[] = [];
-              for (const f of files) {
-                try {
-                  got.push(await importAudioFile(f));
-                } catch (err) {
-                  setAddError(`${f.name}: ${err instanceof Error ? err.message : String(err)}`);
-                }
-              }
-              setAdding(false);
-              if (got.length) addTracks(got);
-            }}
-          />
-          {addError && <p className="whitespace-pre-line text-sm text-danger">{addError}</p>}
           <div className="grid grid-cols-3 gap-2">
             <Button className="px-1 text-sm" onClick={() => void pickTracks()} disabled={adding}>
               {adding ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Tracks

@@ -42,7 +42,10 @@ export const isAlbum = (t: Soundtrack) =>
 /** True when the album starts over after its last track. */
 export const albumLoops = (t: Soundtrack) => t.segments.length > 0 && t.segments.every((s) => s.repeat.mode === 'interval');
 
-/** Timeline start and length of one pass through the album. */
+/** Seconds of silence after one track: its own pause, else the album's. */
+export const gapAfter = (t: Soundtrack, seg: Segment) => Math.max(0, seg.gapAfter ?? t.albumGap ?? 0);
+
+/** Timeline start and length of one pass through the album (to the end of the last track). */
 export function albumSpan(t: Soundtrack): { start: number; length: number } {
   if (!t.segments.length) return { start: 0, length: 0 };
   const start = Math.min(...t.segments.map((s) => s.start));
@@ -68,18 +71,24 @@ export function repackAlbum(t: Soundtrack, durationOf: (assetId: string) => numb
     s.start = at;
     s.length = playedLength(s, s.assetId ? durationOf(s.assetId) : undefined);
     s.params.loop = 0;
-    at += s.length;
+    at += s.length + gapAfter(t, s);
   }
   const total = at - (t.segments[0]?.start ?? 0);
   for (const s of t.segments) s.repeat = loop && total > 0 ? { mode: 'interval', every: total } : { mode: 'none' };
   t.album = true;
 }
 
-/** Which track plays at timeline time `pos` (-1 between or after). */
+/** Seconds from one start of the album to the next: a pass plus the pause after the last track when looping. */
+export function albumCycle(t: Soundtrack): number {
+  const r = t.segments[0]?.repeat;
+  return r && r.mode === 'interval' ? r.every : albumSpan(t).length;
+}
+
+/** Which track plays at timeline time `pos` (-1 in a pause, before or after). */
 export function trackAt(t: Soundtrack, pos: number): number {
   const { start, length } = albumSpan(t);
   if (length <= 0 || pos < start) return -1;
   let p = pos;
-  if (albumLoops(t)) p = start + ((pos - start) % length);
+  if (albumLoops(t)) p = start + ((pos - start) % albumCycle(t));
   return t.segments.findIndex((s) => p >= s.start && p < s.start + s.length);
 }

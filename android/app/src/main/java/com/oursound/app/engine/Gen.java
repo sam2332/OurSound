@@ -77,8 +77,12 @@ public final class Gen {
         register(trimmed(new Def("wind", new String[] {"strength", "gusts", "pitch"}, new double[] {0.5, 0.5, 0.4}, Ambient::wind), 1.42));
         register(trimmed(new Def("ocean", new String[] {"period", "size", "closeness"}, new double[] {9, 0.6, 0.5}, Ambient::ocean), 0.96));
         register(trimmed(new Def("campfire", new String[] {"size", "crackle", "pops"}, new double[] {0.5, 0.5, 0.4}, Campfire::create), 2));
-        register(trimmed(new Def("drums", new String[] {"tempo", "style", "depth", "variety"}, new double[] {60, 1, 0.3, 0.3}, Drums::create), 1));
-        register(trimmed(new Def("crickets", new String[] {"crickets", "rate", "pitch", "rests"}, new double[] {5, 2, 0.5, 0.3}, Crickets::create), 0.6));
+        register(trimmed(new Def("drums", new String[] {"tempo", "style", "depth", "variety"}, new double[] {60, 1, 0.3, 0.3}, Drums::create), 1.1));
+        register(trimmed(new Def("crickets", new String[] {"crickets", "rate", "pitch", "rests"}, new double[] {5, 2, 0.5, 0.3}, Crickets::create), 1.2));
+        register(trimmed(new Def("stream", new String[] {"flow", "pitch", "closeness"}, new double[] {0.5, 0.45, 0.5}, Stream::create), 1.4));
+        register(trimmed(new Def("bowl", new String[] {"rate", "pitch", "ring", "variety"}, new double[] {2, 0.35, 0.6, 0.5}, Bowl::create), 4));
+        register(trimmed(new Def("purr", new String[] {"breaths", "pitch", "rumble"}, new double[] {20, 0.4, 0.5}, Purr::create), 1.2));
+        register(trimmed(new Def("pad", new String[] {"mood", "pitch", "change", "brightness", "movement"}, new double[] {0, 0, 45, 0.35, 0.5}, Pad::create), 3.5));
         register(new Def("file", new String[] {"speed", "pitch", "tone", "loop", "xfade", "offset"}, new double[] {1, 0, 0, 1, 0.35, 0}, FileSource::create));
     }
 }

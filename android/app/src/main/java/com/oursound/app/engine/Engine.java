@@ -57,7 +57,7 @@ public final class Engine {
     private static final double DUCK_ATTACK = 0.4, DUCK_RELEASE = 2.5, DUCK_FLOOR_DB = -50, DUCK_RANGE_DB = 24;
     private double duckPow = 0, duckDb = 0;
     // "Fill the quiet": tracks that come in when the music drops well below its recent level.
-    private static final double FILL_AVG_UP = 20, FILL_AVG_DOWN = 90, FILL_FROM_DB = 4, FILL_RANGE_DB = 8, FILL_DEPTH_DB = 40;
+    private static final double FILL_AVG_UP = 20, FILL_AVG_DOWN = 90, FILL_FROM_DB = 6, FILL_RANGE_DB = 8, FILL_DEPTH_DB = 40;
     private static final double FILL_SHORT = 0.6, FILL_IN = 3, FILL_OUT = 0.5;
     private double avgPow = 0, shortPow = 0, fillDb = 0;
 
@@ -513,7 +513,9 @@ public final class Engine {
                     outR[i] = (float) (outR[i] + r);
                     sum += l * l + r * r;
                 }
-                leadPow = sum / (2 * n);
+                // judged at the album's own level: turning the album down must not make it sound "quiet"
+                double user = dbToGain(tr.gainDb);
+                leadPow = sum / (2 * n) / (user * user);
                 continue;
             }
             for (int i = 0; i < n; i++) {

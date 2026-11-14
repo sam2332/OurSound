@@ -34,6 +34,8 @@ public final class Model {
         public Lane[] automation;
         public String assetId;
         public String fadeCurve = "equal";
+        /** Drums "My pattern": [drum][step] velocity, or null. */
+        public double[][] drumPattern;
     }
 
     public static final class Soundtrack {
@@ -129,6 +131,16 @@ public final class Model {
                 sg.seed = Hash.toInt32(g.optDouble("seed", 1));
                 sg.assetId = g.has("assetId") ? g.optString("assetId") : null;
                 sg.fadeCurve = g.optString("fadeCurve", "equal");
+                JSONArray dp = g.optJSONArray("drumPattern");
+                if (dp != null) {
+                    sg.drumPattern = new double[dp.length()][];
+                    for (int a = 0; a < dp.length(); a++) {
+                        JSONArray rowA = dp.optJSONArray(a);
+                        int len = rowA == null ? 0 : rowA.length();
+                        sg.drumPattern[a] = new double[len];
+                        for (int b = 0; b < len; b++) sg.drumPattern[a][b] = rowA.optDouble(b, 0);
+                    }
+                }
                 JSONObject ps = g.optJSONObject("params");
                 if (ps != null) {
                     JSONArray names = ps.names();

@@ -44,8 +44,17 @@ const ALL: CatalogGroup[] = [
       { key: 'wind', label: 'Wind', description: 'Gusting wind', generator: 'wind' },
       { key: 'ocean', label: 'Ocean waves', description: 'Waves rolling in and out', generator: 'ocean' },
       { key: 'campfire', label: 'Campfire', description: 'Crackling fire with pops and a soft roar', generator: 'campfire' },
+      { key: 'stream', label: 'Stream', description: 'A babbling brook: little bubbles over soft running water', generator: 'stream' },
+      { key: 'purr', label: 'Purring cat', description: 'A low, cozy purr that swells with each breath', generator: 'purr' },
       { key: 'crickets', label: 'Crickets', description: 'A summer-night chorus; can come in only when the music goes quiet', generator: 'crickets' },
-      { key: 'drums', label: 'Drums', description: 'Slow hand drums: heartbeat, steady, shamanic or tribal', generator: 'drums' },
+    ],
+  },
+  {
+    title: 'Music & meditation',
+    items: [
+      { key: 'pad', label: 'Ambient pad', description: 'Slow, warm chords drifting from one to the next', generator: 'pad' },
+      { key: 'bowl', label: 'Singing bowl', description: 'Struck now and then, ringing and slowly turning', generator: 'bowl' },
+      { key: 'drums', label: 'Drums', description: 'Hand drums: presets or your own pattern on the drum pad', generator: 'drums' },
     ],
   },
 ];

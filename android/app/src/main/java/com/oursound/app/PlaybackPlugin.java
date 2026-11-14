@@ -59,6 +59,55 @@ public class PlaybackPlugin extends Plugin {
     }
 
     /** Lists every audio file Android knows about (asks for permission first). */
+    /** Posts a feedback report to a Discord webhook: JSON body plus an optional text attachment. */
+    @PluginMethod
+    public void postFeedback(PluginCall call) {
+        String url = call.getString("url");
+        String payload = call.getString("payload", "{}");
+        String fileName = call.getString("fileName");
+        String fileText = call.getString("fileText");
+        if (url == null || !url.matches("^https://[^/]+/api/webhooks/.+")) {
+            call.reject("No feedback address set");
+            return;
+        }
+        new Thread(() -> {
+            java.net.HttpURLConnection c = null;
+            try {
+                String boundary = "----oursound" + System.nanoTime();
+                c = (java.net.HttpURLConnection) new java.net.URL(url).openConnection();
+                c.setConnectTimeout(15000);
+                c.setReadTimeout(20000);
+                c.setDoOutput(true);
+                c.setRequestMethod("POST");
+                c.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + boundary);
+                String crlf = "\r\n";
+                StringBuilder b = new StringBuilder();
+                b.append("--").append(boundary).append(crlf)
+                        .append("Content-Disposition: form-data; name=\"payload_json\"").append(crlf)
+                        .append("Content-Type: application/json").append(crlf).append(crlf)
+                        .append(payload).append(crlf);
+                if (fileName != null && fileText != null) {
+                    b.append("--").append(boundary).append(crlf)
+                            .append("Content-Disposition: form-data; name=\"files[0]\"; filename=\"")
+                            .append(fileName.replace("\"", "")).append("\"").append(crlf)
+                            .append("Content-Type: application/json").append(crlf).append(crlf)
+                            .append(fileText).append(crlf);
+                }
+                b.append("--").append(boundary).append("--").append(crlf);
+                try (OutputStream out = c.getOutputStream()) {
+                    out.write(b.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                }
+                int code = c.getResponseCode();
+                if (code >= 200 && code < 300) call.resolve();
+                else call.reject("Discord answered " + code);
+            } catch (Exception e) {
+                call.reject("Couldn't send: " + e.getMessage());
+            } finally {
+                if (c != null) c.disconnect();
+            }
+        }).start();
+    }
+
     @PluginMethod
     public void scanAudio(PluginCall call) {
         if (getPermissionState(audioAlias()) != PermissionState.GRANTED) {

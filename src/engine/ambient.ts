@@ -12,6 +12,10 @@ import type { GeneratorDef, ParamReader } from './generators.ts';
 import { campfire } from './campfire.ts';
 import { crickets } from './crickets.ts';
 import { drums } from './drums.ts';
+import { bowl } from './bowl.ts';
+import { pad } from './pad.ts';
+import { purr } from './purr.ts';
+import { stream } from './stream.ts';
 import { thunder } from './thunder.ts';
 
 // ------------------------------------------------------------------ box fan
@@ -379,8 +383,8 @@ const ocean: GeneratorDef = {
 function trimmed(def: GeneratorDef, k: number): GeneratorDef {
   return {
     ...def,
-    create: (p, seed) => {
-      const v = def.create(p, seed);
+    create: (p, seed, seg) => {
+      const v = def.create(p, seed, seg);
       return {
         render(t0, n, sr, L, R) {
           v.render(t0, n, sr, L, R);
@@ -401,8 +405,12 @@ export const AMBIENT_GENERATORS = {
   wind: trimmed(wind, 1.42),
   ocean: trimmed(ocean, 0.96),
   campfire: trimmed(campfire, 2),
-  drums: trimmed(drums, 1),
-  crickets: trimmed(crickets, 0.6),
+  drums: trimmed(drums, 1.1),
+  crickets: trimmed(crickets, 1.2),
+  stream: trimmed(stream, 1.4),
+  bowl: trimmed(bowl, 4),
+  purr: trimmed(purr, 1.2),
+  pad: trimmed(pad, 3.5),
 } as const;
 
 // re-exported for tests

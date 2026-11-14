@@ -52,4 +52,21 @@ describe('album editing', () => {
     ]);
     expect(st.segments[0].repeat).toEqual({ mode: 'interval', every: 75 });
   });
+
+  it('leaves the album pause after each track, with per-track overrides', () => {
+    const st = albumSoundtrack(tracks, 'A', 0, 0);
+    st.albumGap = 30;
+    st.segments[1].gapAfter = 0;
+    repackAlbum(st, dur, true);
+    expect(st.segments.map((s) => s.start)).toEqual([0, 130]);
+    // loops right after the last track, since that track has no pause
+    expect(st.segments[0].repeat).toEqual({ mode: 'interval', every: 180 });
+    expect(trackAt(st, 110)).toBe(-1);
+    expect(trackAt(st, 140)).toBe(1);
+    expect(trackAt(st, 185)).toBe(0);
+    st.segments[1].gapAfter = undefined;
+    repackAlbum(st, dur, true);
+    expect(st.segments[0].repeat).toEqual({ mode: 'interval', every: 210 });
+    expect(trackAt(st, 195)).toBe(-1);
+  });
 });

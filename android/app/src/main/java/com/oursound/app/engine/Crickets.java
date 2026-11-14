@@ -7,7 +7,10 @@ final class Crickets {
     private Crickets() {}
 
     private static final int MAX_CRICKETS = 16;
-    private static final double PULSE_GAP = 0.024, PULSE_LEN = 0.017, LOOKBACK = 0.16;
+    private static final double PULSE_GAP = 0.024, PULSE_LEN = 0.017, LOOKBACK = 0.34;
+    private static final double[] ECHO_T = {0, 0.043, 0.097, 0.171};
+    private static final double[] ECHO_G = {1, 0.22, 0.13, 0.07};
+    private static final double LEVEL = 0.32;
 
     private static double timeOfChirp(Gen.ParamReader rate, double b, double guess) {
         double t = guess;
@@ -31,7 +34,7 @@ final class Crickets {
             rateMul[i] = 1 + 0.16 * (Hash.fastUnit(sC, b + 1) - 0.5);
             off[i] = Hash.fastUnit(sC, b + 2);
             pulses[i] = 3 + (int) Math.floor(Hash.fastUnit(sC, b + 3) * 3);
-            gain[i] = i == 0 ? 1 : 0.3 + 0.55 * Hash.fastUnit(sC, b + 4);
+            gain[i] = i == 0 ? 1 : i == 1 ? 0.7 : 0.18 + 0.3 * Hash.fastUnit(sC, b + 4);
             pan[i] = 0.5 + 0.8 * (Hash.fastUnit(sC, b + 5) - 0.5);
             boutLen[i] = 4 + 8 * Hash.fastUnit(sC, b + 6);
             boutOff[i] = Hash.fastUnit(sC, b + 7) * (4 + 8 * Hash.fastUnit(sC, b + 6));
@@ -50,6 +53,7 @@ final class Crickets {
             double bB = rateP.integral(tB);
             double rate0 = Math.max(0.2, rateP.value(tA));
             double baseHz = 2800 + 3200 * pitch;
+            double echoLen = Math.round(ECHO_T[3] * sr);
             for (int i = 0; i < MAX_CRICKETS; i++) {
                 double fade = Math.min(1, count - i);
                 if (fade <= 0) break;
@@ -67,26 +71,34 @@ final class Crickets {
                     double jitter = (Hash.fastUnit(sJ, r * 4) - 0.5) * 0.016;
                     double tk = timeOfChirp(rateP, b, tA + (b - bA) / rate0) + jitter;
                     double at = Math.round(tk * sr);
-                    if (at < 0 || at + len <= start || at >= start + n) continue;
+                    if (at < 0 || at + len + echoLen <= start || at >= start + n) continue;
                     double bout = Math.floor((tk + boutOff[i]) / boutLen[i]);
                     if (Hash.fastUnit(sB, bout * 16 + i) < rests * 0.85) continue;
                     double amp = gain[i] * fade * (0.75 + 0.25 * Hash.fastUnit(sJ, r * 4 + 1));
                     double ph0 = Dsp.TWO_PI * Hash.fastUnit(sJ, r * 4 + 2);
-                    double from = Math.max(start, at);
-                    double to = Math.min(start + n, at + len);
-                    for (double j = from; j < to; j++) {
-                        double tau = (j - at) / sr;
-                        double q = Math.floor(tau / PULSE_GAP);
-                        if (q >= np) continue;
-                        double u = (tau - q * PULSE_GAP) / PULSE_LEN;
-                        if (u >= 1) continue;
-                        double s = Math.sin(Math.PI * u);
-                        double env = s * s * (q == 0 ? 0.75 : 1);
-                        double ph = Dsp.TWO_PI * f * tau + ph0;
-                        double x = (Math.sin(ph) + 0.12 * Math.sin(2 * ph)) * env * amp;
-                        int o = (int) (j - start);
-                        L[o] = (float) (L[o] + x * gl);
-                        R[o] = (float) (R[o] + x * gr);
+                    boolean near = i < 2;
+                    double h2 = near ? 0.18 : 0.05;
+                    double buzz = near ? 0.22 : 0.1;
+                    for (int e = 0; e < 4; e++) {
+                        double ea = at + Math.round(ECHO_T[e] * sr);
+                        double from = Math.max(start, ea);
+                        double to = Math.min(start + n, ea + len);
+                        if (from >= to) continue;
+                        double eg = ECHO_G[e] * amp * LEVEL;
+                        double el = e == 0 ? gl : gr, er = e == 0 ? gr : gl;
+                        for (double j = from; j < to; j++) {
+                            double tau = (j - ea) / sr;
+                            double q = Math.floor(tau / PULSE_GAP);
+                            if (q >= np) continue;
+                            double u = (tau - q * PULSE_GAP) / PULSE_LEN;
+                            if (u >= 1) continue;
+                            double env = (u < 0.15 ? u / 0.15 : (Math.exp(-4 * (u - 0.15)) * (1 - u)) / 0.85) * (q == 0 ? 0.7 : 1);
+                            double ph = Dsp.TWO_PI * f * (tau - 0.015 * PULSE_LEN * u * u) + ph0;
+                            double x = (Math.sin(ph) * (1 + buzz * Math.sin(0.25 * ph)) + h2 * Math.sin(2 * ph)) * env * eg;
+                            int o = (int) (j - start);
+                            L[o] = (float) (L[o] + x * el);
+                            R[o] = (float) (R[o] + x * er);
+                        }
                     }
                 }
             }

@@ -42,6 +42,10 @@ export const GENERATOR_TYPES = [
   'campfire',
   'drums',
   'crickets',
+  'stream',
+  'bowl',
+  'purr',
+  'pad',
   'file',
 ] as const;
 
@@ -59,6 +63,8 @@ const segment = z.object({
   automation: z.array(lane).default([]),
   assetId: z.string().optional(),
   fadeCurve: z.enum(['equal', 'linear', 'smooth', 'gentle']).optional(),
+  gapAfter: z.number().finite().min(0).optional(),
+  drumPattern: z.array(z.array(z.number().finite().min(0).max(1)).max(64)).max(8).optional(),
 });
 
 const soundtrack = z.object({
@@ -72,6 +78,7 @@ const soundtrack = z.object({
   segments: z.array(segment).default([]),
   automation: z.array(lane).default([]),
   album: z.boolean().optional(),
+  albumGap: z.number().finite().min(0).optional(),
 });
 
 export const timelineSchema = z.object({

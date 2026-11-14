@@ -11,6 +11,7 @@ import { TEMPLATES, TEMPLATE_CATEGORIES } from '../templates.ts';
 import { ReceiveButtons, ShareSheet } from './ShareSheets.tsx';
 import { scanShared } from './SharedImport.tsx';
 import { Button, Confirm, IconButton, Sheet, cx, fmtDuration } from '../ui/controls.tsx';
+import { FeedbackButton } from './FeedbackSheet.tsx';
 
 function TrackDots({ tl }: { tl: Timeline }) {
   return (
@@ -116,9 +117,12 @@ export function LibraryScreen() {
           <p className="text-sm text-muted">Generated sound for sleep, rest and focus</p>
           </div>
         </div>
-        <IconButton label="Settings" onClick={() => navigate({ name: 'settings' })}>
-          <SettingsIcon size={20} />
-        </IconButton>
+        <div className="flex items-center">
+          <FeedbackButton />
+          <IconButton label="Settings" onClick={() => navigate({ name: 'settings' })}>
+            <SettingsIcon size={20} />
+          </IconButton>
+        </div>
       </header>
 
       <div className="flex gap-2">

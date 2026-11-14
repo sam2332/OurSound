@@ -1,12 +1,14 @@
-import { ArrowLeft, BatteryCharging, FileAudio, Headphones, ShieldCheck, Trash2 } from 'lucide-react';
+import { ArrowLeft, BatteryCharging, FileAudio, Headphones, MessageSquareText, ShieldCheck, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { deleteAsset, type StoredAsset } from '../audio/assets.ts';
 import { useAssets } from '../audio/useAssets.ts';
 import { ABSOLUTE_MAX_CAP_DB } from '../engine/core.ts';
 import { Playback } from '../native/playback.ts';
+import { feedbackEnabled } from '../feedback.ts';
 import { useLibrary } from '../store/library.ts';
 import { usePlayback } from '../store/playback.ts';
 import { Button, Card, Confirm, IconButton, Segmented, Slider, fmtDuration } from '../ui/controls.tsx';
+import { FeedbackSheet } from './FeedbackSheet.tsx';
 
 export const SLEEP_CHOICES: (number | null)[] = [null, 15, 30, 45, 60, 90, 120, 240];
 
@@ -25,6 +27,7 @@ export function SettingsScreen() {
   const assets = useAssets();
   const timelines = useLibrary((s) => s.timelines);
   const [toDelete, setToDelete] = useState<StoredAsset | null>(null);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const usedIn = (assetId: string) =>
     Object.values(timelines).filter((t) => t.soundtracks.some((tr) => tr.segments.some((sg) => sg.assetId === assetId)));
 
@@ -166,6 +169,17 @@ export function SettingsScreen() {
           <li>If headphones disconnect, OurSound pauses instead of playing through the speaker.</li>
         </ul>
       </Card>
+
+      {feedbackEnabled && (
+        <Card>
+          <h2 className="flex items-center gap-2 font-semibold">
+            <MessageSquareText size={18} className="text-accent" /> Feedback
+          </h2>
+          <p className="text-sm text-muted">Something sound off, or broke? Tell us. The timeline you were on can be sent along.</p>
+          <Button onClick={() => setFeedbackOpen(true)}>Send feedback</Button>
+          <FeedbackSheet open={feedbackOpen} onClose={() => setFeedbackOpen(false)} />
+        </Card>
+      )}
 
       <Card>
         <h2 className="font-semibold">About</h2>

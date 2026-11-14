@@ -19,7 +19,7 @@ function track(id: string, g: GeneratorType, gainDb: number, start = 0): Soundtr
 }
 
 /** RMS of the background alone (lead output subtracted) between `from` and `to` seconds. */
-function bgRms(focus: FocusMix | undefined, leadStart = 0, from = 4, to = 5, leadDrop?: { at: number; db: number }) {
+function bgRms(focus: FocusMix | undefined, leadStart = 0, from = 4, to = 5, leadDrop?: { at: number; db: number }, leadVolume = 0) {
   const mk = (withBg: boolean): Timeline => ({
     id: 't',
     name: 't',
@@ -30,6 +30,7 @@ function bgRms(focus: FocusMix | undefined, leadStart = 0, from = 4, to = 5, lea
       ...(withBg ? [track('bg', 'noise', -20)] : []),
       (() => {
         const t = track('lead', 'tone', -10, leadStart);
+        t.gainDb = leadVolume;
         // a quiet passage: the lead drops `db` at `at` seconds
         if (leadDrop)
           t.automation = [{ param: 'gain', points: [{ t: 0, v: 0, curve: 'hold' }, { t: leadDrop.at, v: leadDrop.db, curve: 'hold' }] }];
@@ -89,5 +90,11 @@ describe('focus mix', () => {
     // loud until 40 s, then 18 dB quieter: in by 50 s
     expect(db(bgRms(fill, 0, 38, 39, { at: 40, db: -18 }), plain)).toBeLessThan(-30);
     expect(db(bgRms(fill, 0, 50, 51, { at: 40, db: -18 }), plain)).toBeGreaterThan(-3);
+  });
+
+  it('turning the album down does not let fill tracks in', () => {
+    const plain = bgRms(undefined);
+    const fill: FocusMix = { lead: 'lead', follow: [], fill: ['bg'], levelDb: 0, duckDb: 0 };
+    expect(db(bgRms(fill, 0, 4, 5, undefined, -40), plain)).toBeLessThan(-30);
   });
 });

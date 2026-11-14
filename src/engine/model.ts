@@ -47,10 +47,18 @@ export type GeneratorType =
   | 'campfire'
   | 'drums'
   | 'crickets'
+  | 'stream'
+  | 'bowl'
+  | 'purr'
+  | 'pad'
   | 'file';
 
 export type Segment = {
   id: string;
+  /** Album tracks: this track's own pause after it, overriding the album's (UI only). */
+  gapAfter?: number;
+  /** Drums, "My pattern": [drum][step] velocity 0..1 for the 16 steps of a bar. */
+  drumPattern?: number[][];
   /** Timeline time of the first play. */
   start: number;
   /** Length of one play. */
@@ -87,6 +95,8 @@ export type Soundtrack = {
   automation: AutomationLane[];
   /** Shown and edited as an album: imported tracks back to back (UI only; playback ignores it). */
   album?: boolean;
+  /** Album only: seconds of silence after every track (UI only; the segments are laid out with it). */
+  albumGap?: number;
 };
 
 /** stop: fade out at the end · loop: start over · wake: gentle volume rise over the last minutes, then stop. */

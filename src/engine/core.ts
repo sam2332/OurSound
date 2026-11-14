@@ -22,7 +22,7 @@ const DUCK_RANGE_DB = 24; // ...and is full this much above it
 const FILL_SHORT = 0.6; // s, how fast fill tracks hear the music go quiet
 const FILL_AVG_UP = 20; // s, the recent level rises this slowly...
 const FILL_AVG_DOWN = 90; // s, ...and forgets loud parts this slowly
-const FILL_FROM_DB = 4; // dB under the recent level where fill tracks start coming in
+const FILL_FROM_DB = 6; // dB under the recent level where fill tracks start coming in
 const FILL_RANGE_DB = 8; // ...and are fully in this much further down
 const FILL_DEPTH_DB = 40; // how far down fill tracks sit while the music plays
 const FILL_IN = 3; // s, fading in
@@ -496,7 +496,9 @@ export class Engine {
           outR[i] += r;
           sum += l * l + r * r;
         }
-        leadPow = sum / (2 * n);
+        // judged at the album's own level: turning the album down must not make it sound "quiet"
+        const user = dbToGain(tr.gainDb);
+        leadPow = sum / (2 * n) / (user * user);
         continue;
       }
       for (let i = 0; i < n; i++) {

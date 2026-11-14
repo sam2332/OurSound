@@ -67,7 +67,7 @@ function engineAt(tl: Timeline, seconds: number) {
 }
 
 describe('ambient generators', () => {
-  for (const g of ['fan', 'rain', 'thunder', 'wind', 'ocean', 'campfire', 'drums'] as GeneratorType[]) {
+  for (const g of ['fan', 'rain', 'thunder', 'wind', 'ocean', 'campfire', 'drums', 'stream', 'bowl', 'purr', 'pad'] as GeneratorType[]) {
     it(`${g}: finite, audible, and the same after a seek`, () => {
       const tl = tlFor(g, g === 'thunder' ? { rate: 60, distance: 0.2 } : {});
       // play through from 5 h, vs seek straight to 5 h + 3 s

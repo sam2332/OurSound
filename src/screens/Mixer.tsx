@@ -1,3 +1,5 @@
+import { FeedbackButton } from './FeedbackSheet.tsx';
+import { DrumPad } from './DrumPad.tsx';
 import { MissingFilesCard } from './SharedImport.tsx';
 import {
   ArrowLeft,
@@ -127,6 +129,7 @@ export function MixerScreen({ id }: { id: string }) {
         <IconButton label="Redo" onClick={() => redo()} disabled={futureStates.length === 0}>
           <Redo2 size={18} />
         </IconButton>
+        <FeedbackButton />
       </header>
 
       <MissingFilesCard timeline={tl} />
@@ -706,6 +709,8 @@ export function SegmentEditor({
           />
         ),
       )}
+
+      {seg.generator === 'drums' && <DrumPad seg={seg} color={color} editSeg={editSeg} />}
 
       <Slider
         label="Segment volume"
