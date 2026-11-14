@@ -7,7 +7,7 @@
   <img alt="React 19" src="https://img.shields.io/badge/React-19-C8102E?logo=react&logoColor=FFD966">
   <img alt="TypeScript strict" src="https://img.shields.io/badge/TypeScript-strict-C8102E?logo=typescript&logoColor=FFD966">
   <img alt="Capacitor 8" src="https://img.shields.io/badge/Capacitor-8-C8102E?logo=capacitor&logoColor=FFD966">
-  <img alt="Audio: 100% generated" src="https://img.shields.io/badge/audio-100%25%20generated-FFD966?labelColor=C8102E">
+  <img alt="Built-in sounds: generated live" src="https://img.shields.io/badge/built--in%20sounds-generated%20live-FFD966?labelColor=C8102E">
   <img alt="Ownership: collective" src="https://img.shields.io/badge/ownership-collective-FFD966?labelColor=C8102E">
 </p>
 
@@ -39,14 +39,14 @@
 ## ★ What the collective has built
 
 - 🎧 **Binaural beats for every ear.** Each ear gets its own pure tone, computed in double precision with nothing in the way, so the beat stays clean all night.
-- 🏭 **Every sound is produced live.** Nothing is recorded or looped, so there's no seam at 3 a.m. Hour 1 and hour 3,000 cost the same memory and battery.
-- 📈 **A plan for the whole night.** Drift from 10 Hz alpha down to 2 Hz delta, let the storm pass, fade the fan out by morning. Draw a curve for any setting.
+- 🏭 **Every built-in sound is produced live.** The rain, fan, thunder and the rest aren't recordings or loops, so there's no seam at 3 a.m. Hour 1 and hour 3,000 cost the same memory and battery.
+- 📈 **A plan for the whole night.** Drift from 10 Hz alpha down to 2 Hz delta, let the storm pass, fade the fan out by morning. Draw a curve for volume and most sound settings.
 - 🔁 **Repeats without copies.** Loop a sound, play it every 15 minutes, or at random times. Thunder never rolls the same way twice.
-- 💿 **Your music, shared with the people.** Build an album from your own MP3/M4A/WAV files and add a pause after each track. **Music on top** lets the background sounds fill the quiet parts.
+- 💿 **Your own music.** Build an album from your own songs (MP3, M4A, WAV, FLAC, OGG…) and add a pause after each track. **Music on top** lets the background sounds fill the quiet parts.
 - 🥁 **The drum pad.** Tap out your own 16-step hand-drum rhythm and slow it down through the night.
-- 📤 **Distribution by QR code.** A whole 8-hour night fits in one QR code. Pass it to a comrade.
-- 🛡️ **Safety of the worker's ears.** A volume cap you set is enforced by a limiter on everything. Every play fades in from silence, and there's a sleep timer and a gentle wake.
-- 🔒 **No surveillance.** No account, no ads, no tracking. Everything stays on your phone.
+- 📤 **Distribution by QR code.** Pass a timeline to a comrade as a code: a small one fits in a single QR code, and a bigger one splits into a few that scan in any order. Imported songs don't travel; the receiver links their own copies.
+- 🛡️ **Safety of the worker's ears.** A volume cap you set is enforced by a limiter on everything. Play fades in from silence (up to 30 s, your choice), and there's a sleep timer and a gentle wake.
+- 🔒 **No surveillance.** No account, no ads, no tracking. Nothing leaves your phone unless you share a timeline or send feedback.
 
 ## ☭ The people's sound palette
 
@@ -58,7 +58,7 @@
 | **Music & meditation** | Ambient pad · Singing bowl · Hand drums (with drum pad) |
 | **Your own audio** | Imported songs, single tracks or whole albums |
 
-Each sound has its own controls: rain intensity, fan speed and wobble, thunder distance, bowl pitch and ring, pad mood and key, and more. Every setting can follow a curve over time.
+Each sound has its own controls: rain intensity, fan speed and wobble, thunder distance, bowl size and ring time, pad mood and key, and more. Most of them can follow a curve over time.
 
 ## 🌙 Collectively owned nights
 
@@ -86,12 +86,12 @@ Timeline          the whole night (one plays at a time)
 
 - **Seeking is instant.** Oscillator phase comes from a closed-form formula, so jumping to hour 6 needs no catching up.
 - **Random, but planned.** Raindrops, thunder and cricket chirps come from `hash(seed, time)`. The same moment always sounds the same, and no event lists are stored anywhere.
-- **Timelines are tiny.** A whole night is a few KB of JSON, small enough for a QR code.
-- **Two engines, one sound.** The engine is written in TypeScript and ported line by line to Java for Android's native `AudioTrack`, so it keeps playing with the screen off. Golden tests check that the two match to within 1e-4, and most sounds match sample for sample.
+- **Timelines are tiny.** A whole night is just settings, a few KB of JSON, so it can be shared as a short code.
+- **Two engines, one sound.** The engine is written in TypeScript and ported line by line to Java for Android's native `AudioTrack`, so it keeps playing with the screen off. Golden tests check that the two match to within 1e-4.
 
 ## 🚜 Join the workforce
 
-**Requirements:** Node 22+, Android Studio (SDK and platform-tools), and an Android 7.0+ phone with headphones.
+**Requirements:** Node 20.19+ or 22.12+, Android Studio (SDK and platform-tools), and an Android 7.0+ phone with headphones.
 
 ```bash
 npm install
@@ -103,7 +103,7 @@ Try it in the browser (it uses the TypeScript engine):
 npm run dev
 ```
 
-Build a debug APK for Android:
+Build a debug APK for Android (this script calls `gradlew.bat`, so it's Windows-only; elsewhere run the same steps with `./gradlew`):
 
 ```bash
 npm run android
@@ -113,6 +113,12 @@ Install it on a connected phone:
 
 ```bash
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+```
+
+For real overnight listening, use a release build. The native engine runs much faster than in a debug build, and the release build is signed with your local debug key so it installs directly:
+
+```bash
+npm run build && npx cap sync android && cd android && ./gradlew assembleRelease
 ```
 
 ### Optional: the suggestion box
