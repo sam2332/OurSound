@@ -174,5 +174,5 @@ PLAN.md          the Five-Year Plan: design decisions and the full progress log
 <p align="center">
   <img src="docs/img/icon.png" width="64" alt="OurSound icon"><br>
   <b>Workers of the world, unwind.</b><br>
-  <sub>The communism is a joke; the sleep is serious. OurSound is for relaxation and sleep, not a medical device. Brainwave entrainment effects vary from person to person.</sub>
+  <sub>OurSound is for relaxation and sleep, not a medical device. Brainwave entrainment effects vary from person to person.</sub>
 </p>
