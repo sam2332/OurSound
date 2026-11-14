@@ -1,0 +1,123 @@
+# Builds the Android app for each version tag (v1.0.0, v2.0.0, …) and publishes the APK
+# as a GitHub Release, plus a workflow artifact.
+#
+#   git tag v1.0.0 && git push origin v1.0.0
+#
+# Optional repository secrets:
+#   RELEASE_KEYSTORE_BASE64, RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS, RELEASE_KEY_PASSWORD
+#       A real signing key (base64 of the .jks/.keystore file). Without it the APK is signed with
+#       a throwaway debug key made on the CI machine, so each release can't install over the
+#       previous one (uninstall first) or over a copy built on your own computer.
+#   VITE_FEEDBACK_WEBHOOK
+#       Turns on the in-app feedback button. Anyone with the APK can read this URL out of it.
+
+name: Release APK
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (like 1.2.0). No release is published for a manual run.'
+        required: true
+        default: '0.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Work out the version
+        id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then raw="${GITHUB_REF_NAME#v}"; else raw="$INPUT_VERSION"; fi
+          if ! echo "$raw" | grep -Eq '^[0-9]+(\.[0-9]+){0,2}$'; then
+            echo "::error::Version must look like 1, 1.2 or 1.2.3 (got '$raw')"; exit 1
+          fi
+          IFS=. read -r major minor patch <<< "$raw"
+          code=$(( ${major} * 1000000 + ${minor:-0} * 1000 + ${patch:-0} ))
+          echo "name=$raw" >> "$GITHUB_OUTPUT"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "Building OurSound $raw (versionCode $code)"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+
+      - name: Install
+        run: npm ci
+
+      - name: Tests (TypeScript)
+        run: npm test
+
+      - name: Build the web app
+        env:
+          VITE_FEEDBACK_WEBHOOK: ${{ secrets.VITE_FEEDBACK_WEBHOOK }}
+        run: npm run build
+
+      - name: Sync Capacitor
+        run: npx cap sync android
+
+      - name: Render golden files for the Java engine test
+        env:
+          GOLDEN_DIR: android/app/src/test/resources/golden
+        run: npx vitest run src/engine/golden.test.ts
+
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "RELEASE_KEYSTORE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "Signing with the release key."
+          else
+            echo "::warning::No RELEASE_KEYSTORE_BASE64 secret: signing with a throwaway debug key."
+          fi
+
+      - name: Test the Java engine and build the release APK
+        working-directory: android
+        env:
+          RELEASE_KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew testDebugUnitTest assembleRelease \
+            -PversionName=${{ steps.version.outputs.name }} \
+            -PversionCode=${{ steps.version.outputs.code }}
+
+      - name: Name the APK
+        id: apk
+        run: |
+          out="OurSound-v${{ steps.version.outputs.name }}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$out"
+          echo "file=$out" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OurSound-v${{ steps.version.outputs.name }}
+          path: ${{ steps.apk.outputs.file }}
+          if-no-files-found: error
+
+      - name: Publish the GitHub Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.apk.outputs.file }}
+          generate_release_notes: true
